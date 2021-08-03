@@ -6,8 +6,12 @@ const util = require('util');
 
 client = new Client({intents: [Intents.FLAGS.GUILDS]});
 client.commands = new Collection();
-client.globalCommands = new Collection(); // store application commands (returned when we send commands to discord) for global commands
-client.guildCommands = new Collection(); // store application commands (returned when we send commands to discord) for guild commands
+client.command_data = new Enmap({
+  fetchAll: true,
+  autoFetch: true,
+  cloneLevel: 'deep',
+	autoEnsure: false
+});
 client.cooldowns = new Collection(); // stores the last time a user used a command
 // per-guild settings
 client.guild_settings = new Enmap({
@@ -46,23 +50,21 @@ for (const folder of commandFolders) {
 
 // PERMISSIONS STUFF STARTS HERE //
 // get a permissions array for a specific command in a specific guild
-async function getCommandPermissions(guild, command) { // command is an ApplicationCommand
-	const commandData = client.commands.get(command.name) // get the command's data
-
-	// get the @everyone role
+async function getCommandPermissions(guild, commandModule) {
+	// get the @eveoyone role
 	const everyoneRole = guild.roles.everyone
 
 	// if there are no required permissions, allow permission for everyone
-	if (!commandData.permissions) return [{id: everyoneRole.id, type: 'ROLE', permission: true}]
+	if (!commandModule.permissions) return [{id: everyoneRole.id, type: 'ROLE', permission: true}]
 
 	// if the bot doesn't have the required permissions, deny permission for everyone
-	if (commandData.permissions.bot) {
+	if (commandModule.permissions.bot) {
 		const botMember = await guild.members.fetch(client.user.id)
-		if (!botMember.permissions.has(commandData.permissions.bot)) return [{id: everyoneRole.id, type: 'ROLE', permission: false}]
+		if (!botMember.permissions.has(commandModule.permissions.bot)) return [{id: everyoneRole.id, type: 'ROLE', permission: false}]
 	}
 
 	// if there are no required permissions for members, allow permission for everyone (we now know that the bot has the required permissions)
-	if (!commandData.permissions.member) return [{id: everyoneRole.id, type: 'ROLE', permission: true}]
+	if (!commandModule.permissions.member) return [{id: everyoneRole.id, type: 'ROLE', permission: true}]
 
 	// find permissions per-role, but also allow the guild owner to execute the command
 	const commandPermissions = [{id: guild.ownerId, type: 'USER', permission: true}]
@@ -71,7 +73,7 @@ async function getCommandPermissions(guild, command) { // command is an Applicat
 	for (const roleId of roles.keys()) {
 		const role = roles.get(roleId)
 
-		if (role.permissions.has(commandData.permissions.member)) {
+		if (role.permissions.has(commandModule.permissions.member)) {
 			commandPermissions.push({id: roleId, type: 'ROLE', permission: true})
 		}
 	}
@@ -79,23 +81,26 @@ async function getCommandPermissions(guild, command) { // command is an Applicat
 	return commandPermissions
 }
 
+async function getCommandId(name, guildId) {
+	const id = client.command_data.get(name, 'id')
+	if (id !== undefined) return id
+	const ids = client.command_data.get(name, 'ids')
+	if (ids === undefined) return;
+	return ids[guildId]
+}
+
+function getCommandById(id, guildId) { // *returns a promise*
+	client.application.commands.fetch(commandId, {guildId: guild.id})
+}
+
 // get permissions array for all commands in a guild (guild & global)
 async function getGuildPermissions(guild) {
 	const permissions = []
 
-	// for each guild command in this guild
-	const guildCommands = client.guildCommands.get(guild.id);
-	for (const commandId of guildCommands.keys()) {
-		const command = guildCommands.get(commandId)
-		const commandPermissions = await getCommandPermissions(guild, command) // get the command's permissions within the guild
-		permissions.push({id: commandId, permissions: commandPermissions}) // push those permissions to the array
-	}
-
-	// for every global command
-	const globalCommands = client.globalCommands
-	for (const commandId of globalCommands.keys()) {
-		const command = globalCommands.get(commandId)
-		const commandPermissions = await getCommandPermissions(guild, command) // get the command's permissions within the guild
+	// for each command
+	for (const commandName of client.commands.keys()) {
+		const commandModule = client.commands.get(commandName)
+		const commandPermissions = await getCommandPermissions(guild, commandModule) // get the command's permissions within the guild
 		permissions.push({id: commandId, permissions: commandPermissions}) // push those permissions to the array
 	}
 
@@ -114,35 +119,19 @@ async function botPermissionsChanged(botMember, oldPermissions) {
 	const guild = botMember.guild
 	const everyoneRole = guild.roles.everyone
 
-	// for each guild command in this guild
-	const guildCommands = client.guildCommands.get(guild.id);
-	for (const commandId of guildCommands.keys()) {
-		const command = guildCommands.get(commandId)
-		const commandData = client.commands.get(command.name)
-		if (!commandData.permissions || !commandData.permissions.bot) continue; // if the command doesn't have bot permissions we can ignore it
-		const botHasPermissions = botMember.permissions.has(commandData.permissions.bot) // does the bot NOW have the required permissions?
-		if (oldPermissions && botHasPermissions === oldPermissions.has(commandData.permissions.bot)) continue; // if we knew what the permissions were beforehand and therefore nothing's changed, move on
+	// for each command
+	for (const commandName of client.commands.keys()) {
+		const commandModule = client.commands.get(commandName)
+		const commandId = getCommandId(commandName, guild.id)
+		if (commandId === undefined) continue;
+		if (!commandModule.permissions || !commandModule.permissions.bot) continue; // if the command doesn't have bot permissions we can ignore it
+		const botHasPermissions = botMember.permissions.has(commandModule.permissions.bot) // does the bot NOW have the required permissions?
+		if (oldPermissions && botHasPermissions === oldPermissions.has(commandModule.permissions.bot)) continue; // if we knew what the permissions were beforehand and therefore nothing's changed, move on
 		if (botHasPermissions) {
-			const commandPermissions = await getCommandPermissions(guild, command) // get the command permissions
-			await command.permissions.set({permissions: commandPermissions})
+			const commandPermissions = await getCommandPermissions(guild, commandModule) // get the command permissions
+			await client.application.commands.permissions.set({command: commandId, guild: guild.id, commandpermissions: commandPermissions})
 		} else {
 			await command.permissions.set({permissions: [{id: everyoneRole.id, type: 'ROLE', permission: false}]}) // deny permission for everyone
-		}
-	}
-
-	// for every global command
-	const globalCommands = client.globalCommands
-	for (const commandId of globalCommands.keys()) {
-		const command = globalCommands.get(commandId)
-		const commandData = client.commands.get(command.name)
-		if (!commandData.permissions || !commandData.permissions.bot) continue; // if the command doesn't have bot permissions we can ignore it
-		const botHasPermissions = botMember.permissions.has(commandData.permissions.bot) // does the bot NOW have the required permissions?
-		if (oldPermissions && botHasPermissions === oldPermissions.has(commandData.permissions.bot)) continue; // if we knew what the permissions were beforehand and therefore nothing's changed, move on
-		if (botHasPermissions) {
-			const commandPermissions = await getCommandPermissions(guild, command) // get the command permissions
-			await command.permissions.set({guild: guild.id, permissions: commandPermissions})
-		} else {
-			await command.permissions.set({guild: guild.id, permissions: [{id: everyoneRole.id, type: 'ROLE', permission: false}]}) // deny permission for everyone
 		}
 	}
 }
@@ -158,10 +147,10 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
 // check if a role's permissions have changed for a specific command
 function checkRolePermissions(role, command, botMember) {
-	const commandData = client.commands.get(command.name)
-	if (!commandData.permissions) continue; // if the command doesn't have any permissions, move on
+	const commandModule = client.commands.get(command.name)
+	if (!commandModule.permissions) continue; // if the command doesn't have any permissions, move on
 	// if there is a lack of bot permissions OR member permissions, deny permission
-	if ((commandData.permissions.bot && !botMember.permissions.has(commandData.permissions.bot)) || (commandData.permissions.member && !role.permissions.has(commandData.permissions.member))) {
+	if ((commandModule.permissions.bot && !botMember.permissions.has(commandModule.permissions.bot)) || (commandModule.permissions.member && !role.permissions.has(commandModule.permissions.member))) {
 		await command.permissions.remove({guild: role.guild.id, roles: role.id})
 	} else {
 		await command.permissions.add({guild: role.guild.id, permissions: [{id: role.id, type: 'ROLE', permission: true}]}) // otherwise, allow permission for this role
@@ -173,52 +162,56 @@ client.on('roleUpdate', async (oldRole, newRole) => { // if a role is updated, t
 	const newPermissions = newRole.permissions
 	if (newPermissions.equals(oldPermissions)) return; // no changes to permissions: ignore
 	// does the change to this role affect the bot's permissions? (we don't know for sure but if they are involved, probably)
+	const guild = newRole.guild
 	if (oldRole.members.has(client.user.id) || newRole.members.has(client.user.id)) {
-		const guild = newRole.guild
 		const botMember = await guild.members.fetch(client.user.id)
 		await botPermissionsChanged(botMember)
 	}
-	const guild = newRole.guild;
 	const botMember = await guild.members.fetch(client.user.id);
 
-	// for each guild command within this guild
-	const guildCommands = client.guildCommands.get(guild.id);
-	guildCommands.forEach(guildCommand => checkRolePermissions(newRole, guildCommand, botMember))
-
-	// for every global command
-	const globalCommands = client.globalCommands
-	globalCommands.forEach(globalCommand => checkRolePermissions(newRole, globalCommand, botMember))
+	// for each command
+	for (const commandName of client.commands.keys()) {
+		const commandId = getCommandId(commandName, guild.id)
+		if (commandId === undefined) continue;
+		const command = getCommandById(commandId, guild.id)
+		checkRolePermissions(newRole, command, botMember)
+	}
 })
 
 // when added to a guild
 client.on('guildCreate', async guild => {
+	// create an array of the guild-specific commands for this guild
 	const guildCommands = []
 	for (const commandName of client.commands.keys()) {
-		const commandData = client.commands.get(commandName)
-		if (!commandData.guilds || !commandData.guilds.includes(guild.id)) continue;
+		const commandModule = client.commands.get(commandName)
+		if (!commandModule.guilds || !commandModule.guilds.includes(guild.id)) continue;
 		const requestData = {
 			name: commandName,
-			description: commandData.description,
-			options: commandData.options || undefined,
-			defaultPermission: !commandData.guild_only // if the command is only for guilds, prevent access by default (in DMs)
+			description: commandModule.description,
+			options: commandModule.options || undefined,
+			defaultPermission: !commandModule.guild_only // if the command is only for guilds, prevent access by default (in DMs)
 		}
 		guildCommands.push(requestData)
 	}
-	const guildApplicationCommands = await client.application.commands.set(guildCommands, guild.id)
-	client.guildCommands.set(guild.id, guildApplicationCommands);
+	const guildApplicationCommands = await client.application.commands.set(guildCommands, guild.id) // set these commands on discord
+	client.guildCommands.set(guild.id, guildApplicationCommands); // update our guild commands collection with the application commands we received.
 	
+
+	// for each command
+	for (const commandName of client.commands.keys()) {
+		const commandId = getCommandId(commandName, guild.id)
+		if (commandId === undefined) continue;
+	}
+	// update the application command ids in the collection of command data
 	for (const commandId of guildApplicationCommands.keys()) {
 		const guildApplicationCommand = guildApplicationCommands.get(commandId);
 		const commandName = guildApplicationCommand.name
-		const commandData = client.commands.get(commandName)
-		if (commandData) {
-			commandData.applicationCommands = commandData.applicationCommands ?? []
-			commandData.applicationCommands.push(guildApplicationCommand)
-		}
+		client.command_data.set(commandName, commandId, `ids.${guildId}`)
 	}
-	await updateGuildPermissions(guild.id)
+	await updateGuildPermissions(guild.id) // update the command permissions for this new guild
 })
 
+// update all slash commands on discord
 async function updateAllSlashCommands() {
 	// build arrays of global commands and guild commands
 	const globalCommands = []
@@ -228,16 +221,16 @@ async function updateAllSlashCommands() {
 		guildCommands[guildId.toString()] = []
 	}
 	for (const commandName of client.commands.keys()) { // for each of the commands in the collection
-		const commandData = client.commands.get(commandName) // get the command
+		const commandModule = client.commands.get(commandName) // get the command
 		const requestData = { // data for this command, sent later to discord to update
 			name: commandName,
-			description: commandData.description,
-			options: commandData.options || undefined,
-			defaultPermission: !commandData.guild_only // if the command is only for guilds, prevent access by default (in DMs)
+			description: commandModule.description,
+			options: commandModule.options || undefined,
+			defaultPermission: !commandModule.guild_only // if the command is only for guilds, prevent access by default (in DMs)
 		}
-		if (commandData.guilds) { // if this command is specific to certain guilds
-			for (let i = 0; i < commandData.guilds.length; i++) { // only push it to the arrays for those guilds
-				const guildId = commandData.guilds[i]
+		if (commandModule.guilds) { // if this command is specific to certain guilds
+			for (let i = 0; i < commandModule.guilds.length; i++) { // only push it to the arrays for those guilds
+				const guildId = commandModule.guilds[i]
 				guildCommands[guildId]?.push(requestData)
 			}
 		} else { // otherwise
@@ -251,20 +244,14 @@ async function updateAllSlashCommands() {
 		for (const commandId of guildApplicationCommands.keys()) { // update command data with the command ids that got returned
 			const guildApplicationCommand = guildApplicationCommands.get(commandId);
 			const commandName = guildApplicationCommand.name
-			const commandData = client.commands.get(commandName)
-			if (commandData) {
-				commandData.applicationCommands = commandData.applicationCommands ?? []
-				commandData.applicationCommands.push(guildApplicationCommand)
-			}
+			client.command_data.set(commandName, commandId, `ids.${guildId}`)
 		}
 	}
-	const globalApplicationCommands = await client.application.commands.set(globalCommands)
-	client.globalCommands = globalApplicationCommands; // update the global slash commands (discord takes up to 1 hour to do this in every server)
+	const globalApplicationCommands = await client.application.commands.set(globalCommands) // update the global slash commands (discord takes up to 1 hour to do this in every server)
 	for (const commandId of globalApplicationCommands.keys()) {
 		const globalApplicationCommand = globalApplicationCommands.get(commandId);
 		const commandName = globalApplicationCommand.name
-		const commandData = client.commands.get(commandName)
-		if (commandData) commandData.applicationCommands = [globalApplicationCommand]
+		client.command_data.set(commandName, commandId, `id`)
 	}
 }
 
@@ -284,10 +271,10 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 		const custom_id = interaction.customId
 		const commandName = custom_id.split('-')[0]
 		if (!commandName) return;
-		const commandData = client.commands.get(commandName);
-		if (!commandData) return await interaction.reply({content: "I got lost while processing that. You should probably tell DarkVoid because he didn't expect this message to get shown.", ephemeral: true})
+		const commandModule = client.commands.get(commandName);
+		if (!commandModule) return await interaction.reply({content: "I got lost while processing that. You should probably tell DarkVoid because he didn't expect this message to get shown.", ephemeral: true})
 		try {
-			await commandData.executeComponent(interaction);
+			await commandModule.executeComponent(interaction);
 		} catch (error) {
 			console.error(error);
 			if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
@@ -301,32 +288,32 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 
 	const commandName = interaction.commandName;
 
-	const commandData = client.commands.get(commandName); // find the command in the collection
+	const commandModule = client.commands.get(commandName); // find the command in the collection
 
-	if (!commandData) return; // this would be problematic (most likely to happen if global commands haven't updated yet - but discord shouldn't send interactions for old commands so this is just a precaution)
+	if (!commandModule) return; // this would be problematic (most likely to happen if global commands haven't updated yet - but discord shouldn't send interactions for old commands so this is just a precaution)
 
-	if ((commandData.guild_only) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}); // handle guild only commands (currently only /ping is non-guild)
+	if ((commandModule.guild_only) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}); // handle guild only commands (currently only /ping is non-guild)
 
-	if (interaction.inGuild() && commandData.permissions) {
-		if (commandData.permissions.member && !interaction.member.permissionsIn(interaction.channel).has(commandData.permissions.member)) return await interaction.reply({content: "You don't have permission to use that command.", ephemeral: true})
-		if (commandData.permissions.bot) {
+	if (interaction.inGuild() && commandModule.permissions) {
+		if (commandModule.permissions.member && !interaction.member.permissionsIn(interaction.channel).has(commandModule.permissions.member)) return await interaction.reply({content: "You don't have permission to use that command.", ephemeral: true})
+		if (commandModule.permissions.bot) {
 			const botMember = await interaction.guild.members.fetch(client.user.id)
-			if (!botMember.permissionsIn(interaction.channel).has(commandData.permissions.bot)) return await interaction.reply({content: "I don't have the required permissions for that command.", ephemeral: true})
+			if (!botMember.permissionsIn(interaction.channel).has(commandModule.permissions.bot)) return await interaction.reply({content: "I don't have the required permissions for that command.", ephemeral: true})
 		}
 	}
 
-	if (commandData.threadOnly && !interaction.channel.isThread()) return await interaction.reply({content: "This command can only be used in a thread.", ephemeral: true})
+	if (commandModule.threadOnly && !interaction.channel.isThread()) return await interaction.reply({content: "This command can only be used in a thread.", ephemeral: true})
 
 	// handle command cooldowns
 	const { cooldowns } = client;
 
-	if (!cooldowns.has(commandData.name)) {
-		cooldowns.set(commandData.name, new Collection());
+	if (!cooldowns.has(commandModule.name)) {
+		cooldowns.set(commandModule.name, new Collection());
 	}
 
 	const now = Date.now();
-	const timestamps = cooldowns.get(commandData.name);
-	const cooldownAmount = (commandData.cooldown ?? 3) * 1000;
+	const timestamps = cooldowns.get(commandModule.name);
+	const cooldownAmount = (commandModule.cooldown ?? 3) * 1000;
 
 	if (timestamps.has(interaction.user.id)) {
 		const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
@@ -342,7 +329,7 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 
 	// execute the command, catch any errors
 	try {
-		await commandData.execute(interaction);
+		await commandModule.execute(interaction);
 	} catch (error) {
 		console.error(error);
 		if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
