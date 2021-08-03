@@ -26,8 +26,7 @@ module.exports = {
     const opponent = interaction.options.getUser('opponent', true)
     if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
     await interaction.defer()
-    let content = `<@${challenger.id}> challenges <@${opponent.id}> to a game of rock paper scissors! Pick an option from below:`
-    if (opponent.id === client.user.id) content = `<@${challenger.id}> challenged me to a game of rock paper scissors! Pick an option from below:`
+    let content = `<@${challenger.id}> challenges <@${opponent.id}> to a game of rock paper scissors!`
     await interaction.editReply({
       content: content,
       components: [

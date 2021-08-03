@@ -1,7 +1,8 @@
 const Enmap = require('enmap');
 
 const colours = ["red", "yellow", "blue", "green"]
-const names = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+2", "reverse", "skip", "card", "+4"]
+const names = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+2", "reverse", "skip"]
+const wildNames = ["card", "+4"]
 
 function mod(a, b) {
   return ((a % b) + b) % b
@@ -26,9 +27,17 @@ function getCard(index, wildColour) {
   if (index < 100) {
     return [colours[(index % 4)], names[Math.floor(((index % 25) + 1) / 2)]]
   }
-  const card = ["wild", names[(index % 2) + 13]]
+  const card = ["wild", wildNames[(index % 2)]]
   if (wildColour) card.push(wildColour)
   return card
+}
+
+function getName(card) {
+  let name = card.slice(0, 2).join(" ")
+  if (card.length > 2) {
+    name += "(" + card.slice(2).join(" ") + ")"
+  }
+  return name
 }
 
 function isPlayable(card, topCard, drawRequirement) {
@@ -189,7 +198,7 @@ module.exports = {
         shuffle(players)
 
         await interaction.reply({
-          content: `<@${interaction.user.id}> started the game. Turn order: <@${players.join('>, <@')}>.\n<@${players[0]}> will play first, and the top card is a **${topCard.join(" ")}**.`,
+          content: `<@${interaction.user.id}> started the game. Turn order: <@${players.join('>, <@')}>.\n<@${players[0]}> will play first, and the top card is a **${getName(topCard)}**.`,
           components: [
             {
               type: 'ACTION_ROW',
@@ -216,7 +225,7 @@ module.exports = {
         wildColour = game_states.get(channelId, 'wild_colour')
         topCard = getCard(topCardIndex, wildColour)
 
-        content = `The current card is a **${topCard.join(" ")}**.\n`
+        content = `The current card is a **${getName(topCard)}**.\n`
         components = []
         isTurn = mod(turn, numPlayers) === playerIndex
         if (isTurn) {
@@ -272,7 +281,7 @@ module.exports = {
           allDisabled = allDisabled && disabled
           components[row].components.push({
             type: 'BUTTON',
-            label: card.join(" "),
+            label: getName(card),
             style: "SECONDARY",
             disabled: disabled,
             custom_id: `uno-play${(drawnCardIndex !== undefined) ? 'drawn' : ''}-${cardIndex}`
@@ -366,10 +375,10 @@ module.exports = {
         })
         drawnCardIndex = game_states.get(channelId, 'drawn_card');
         if (drawnCardIndex !== undefined) {
-          content += `<@${interaction.user.id}> played a **${chosenCard.join(" ")}** after drawing it.`;
+          content += `<@${interaction.user.id}> played a **${getName(chosenCard)}** after drawing it.`;
           game_states.delete(channelId, 'drawn_card');
         } else {
-          content += `<@${interaction.user.id}> played a **${chosenCard.join(" ")}**.`
+          content += `<@${interaction.user.id}> played a **${getName(chosenCard)}**.`
         }
 
         discardCard(channelId, interaction.user.id, chosenCardIndex)
@@ -437,7 +446,7 @@ module.exports = {
           if (dealtCards.length < drawRequirement) content += ` - there were not enough available to draw ${drawRequirement}`
           content += `. They now have **${hand.length}** cards.`
           game_states.delete(channelId, 'draw_requirement');
-          await interaction.reply({content: `You drew: **${dealtCards.map(index => getCard(index).join(" ")).join("**, **")}**`, ephemeral: true});
+          await interaction.reply({content: `You drew: **${dealtCards.map(index => getName(getCard(index))).join("**, **")}**`, ephemeral: true});
           break;
         }
         const initialDrawnCardIndex = game_states.get(channelId, 'drawn_card');
@@ -454,7 +463,7 @@ module.exports = {
             if (!drawnCard) drawnCard = getCard(drawnCardIndex);
             game_states.set(channelId, drawnCardIndex, 'drawn_card')
             return await interaction.reply({
-              content: `You drew a **${drawnCard.join(" ")}**.`,
+              content: `You drew a **${getName(drawnCard)}**.`,
               components: [
                 {
                   type: 'ACTION_ROW',
@@ -477,7 +486,7 @@ module.exports = {
               ephemeral: true
             })
           }
-          await interaction.reply({content: `You drew a **${drawnCard.join(" ")}**.`, ephemeral: true});
+          await interaction.reply({content: `You drew a **${getName(drawnCard)}**.`, ephemeral: true});
         }
       case 'end':
         if (actionType === 'end') {
