@@ -1,0 +1,2 @@
+# VoidBot
+ A Discord bot

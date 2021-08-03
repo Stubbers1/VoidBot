@@ -1,0 +1,378 @@
+require('dotenv').config({ path: ".env" })
+const fs = require('fs');
+const { Client, Intents, Collection, Message } = require('discord.js');
+const Enmap = require('enmap');
+const util = require('util');
+
+client = new Client({intents: [Intents.FLAGS.GUILDS]});
+client.commands = new Collection();
+client.globalCommands = new Collection();
+client.guildCommands = new Collection();
+client.cooldowns = new Collection();
+client.guild_settings = new Enmap({
+  name: "settings",
+  fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {} // default settings for new guilds go in here
+});
+
+client.scheduled_settings = new Enmap({
+  name: "scheduled_tasks",
+  fetchAll: true,
+  autoFetch: true,
+  cloneLevel: 'deep'
+});
+
+getRandomInt = function(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+
+const commandFolders = fs.readdirSync('./commands');
+
+for (const folder of commandFolders) {
+	const commandFiles = fs.readdirSync(`./commands/${folder}`).filter(file => file.endsWith('.js'));
+	for (const file of commandFiles) {
+		const command = require(`./commands/${folder}/${file}`);
+		client.commands.set(command.name, command);
+	}
+}
+
+// PERMISSIONS STUFF STARTS HERE //
+// get a permissions array for a specific command in a specific guild
+async function getCommandPermissions(guild, command) { // command is an ApplicationCommand
+	const commandData = client.commands.get(command.name)
+
+	const everyoneRole = guild.roles.everyone
+
+	// if there are no required permissions, allow permission for everyone
+	if (!commandData.permissions) return [{id: everyoneRole.id, type: 'ROLE', permission: true}]
+
+	// if the bot doesn't have the required permissions, deny permission for everyone
+	if (commandData.permissions.bot) {
+		const botMember = await guild.members.fetch(client.user.id)
+		if (!botMember.permissions.has(commandData.permissions.bot)) return [{id: everyoneRole.id, type: 'ROLE', permission: false}]
+	}
+
+	// if there are no required permissions for members, allow permission for everyone (we now know that the bot has the required permissions)
+	if (!commandData.permissions.member) return [{id: everyoneRole.id, type: 'ROLE', permission: true}]
+
+	const commandPermissions = [{id: guild.ownerId, type: 'USER', permission: true}]
+
+	const roles = guild.roles.cache
+	for (const roleId of roles.keys()) {
+		const role = roles.get(roleId)
+
+		if (role.permissions.has(commandData.permissions.member)) {
+			commandPermissions.push({id: roleId, type: 'ROLE', permission: true})
+		}
+	}
+
+	return commandPermissions
+}
+
+// get permissions array for all commands in a guild
+async function getGuildPermissions(guild) {
+	const permissions = []
+
+	const guildCommands = client.guildCommands.get(guild.id);
+	for (const commandId of guildCommands.keys()) {
+		const command = guildCommands.get(commandId)
+		const commandPermissions = await getCommandPermissions(guild, command)
+		permissions.push({id: commandId, permissions: commandPermissions})
+	}
+
+	const globalCommands = client.globalCommands
+	for (const commandId of globalCommands.keys()) {
+		const command = globalCommands.get(commandId)
+		const commandPermissions = await getCommandPermissions(guild, command)
+		permissions.push({id: commandId, permissions: commandPermissions})
+	}
+
+	return permissions
+}
+
+// update the slash command permissions for a specific guild
+async function updateGuildPermissions(guildId) {
+	const guild = await client.guilds.fetch(guildId)
+	const guildPermissions = await getGuildPermissions(guild);
+	client.application.commands.permissions.set({guild: guildId, fullPermissions: guildPermissions})
+}
+
+// when the bot's permissions change in a guild, recalculate some permissions
+async function botPermissionsChanged(botMember, oldPermissions) {
+	const guild = botMember.guild
+	const everyoneRole = guild.roles.everyone
+
+	const guildCommands = client.guildCommands.get(guild.id);
+	for (const commandId of guildCommands.keys()) {
+		const command = guildCommands.get(commandId)
+		const commandData = client.commands.get(command.name)
+		if (!commandData.permissions || !commandData.permissions.bot) continue;
+		const botHasPermissions = botMember.permissions.has(commandData.permissions.bot)
+		if (oldPermissions && botHasPermissions === oldPermissions.has(commandData.permissions.bot)) continue;
+		if (botHasPermissions) {
+			const commandPermissions = await getCommandPermissions(guild, command)
+			await command.permissions.set({permissions: commandPermissions})
+		} else {
+			await command.permissions.set({permissions: [{id: everyoneRole.id, type: 'ROLE', permission: false}]})
+		}
+	}
+
+	const globalCommands = client.globalCommands
+	for (const commandId of globalCommands.keys()) {
+		const command = globalCommands.get(commandId)
+		const commandData = client.commands.get(command.name)
+		if (!commandData.permissions || !commandData.permissions.bot) continue;
+		const botHasPermissions = botMember.permissions.has(commandData.permissions.bot)
+		if (oldPermissions && botHasPermissions === oldPermissions.has(commandData.permissions.bot)) continue;
+		if (botHasPermissions) {
+			const commandPermissions = await getCommandPermissions(guild, command)
+			await command.permissions.set({guild: guild.id, permissions: commandPermissions})
+		} else {
+			await command.permissions.set({guild: guild.id, permissions: [{id: everyoneRole.id, type: 'ROLE', permission: false}]})
+		}
+	}
+}
+
+// when the bot's permissions change, we need to recalculate permissions (the bot denies access to commands it can't execute)
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+	if (newMember.id !== client.user.id) return;
+	const oldPermissions = oldMember.permissions
+	const newPermissions = newMember.permissions
+	if (newPermissions.equals(oldPermissions)) return; // no changes to permissions: ignore
+	await botPermissionsChanged(newMember, oldPermissions)
+})
+
+client.on('roleUpdate', async (oldRole, newRole) => { // if a role is updated, the permissions will need to be updated
+	const oldPermissions = oldRole.permissions
+	const newPermissions = newRole.permissions
+	if (newPermissions.equals(oldPermissions)) return; // no changes to permissions: ignore
+	if (oldRole.members.has(client.user.id) || newRole.members.has(client.user.id)) {
+		const guild = newRole.guild
+		const botMember = await guild.members.fetch(client.user.id)
+		await botPermissionsChanged(botMember)
+	}
+	const guild = newRole.guild;
+	const botMember = await guild.members.fetch(client.user.id);
+
+	const guildCommands = client.guildCommands.get(guild.id);
+	for (const commandId of guildCommands.keys()) {
+		const command = guildCommands.get(commandId)
+		const commandData = client.commands.get(command.name)
+		if (!commandData.permissions) continue;
+		if ((commandData.permissions.bot && !botMember.permissions.has(commandData.permissions.bot)) || (commandData.permissions.member && !newRole.permissions.has(commandData.permissions.member))) {
+			await command.permissions.remove({roles: newRole.id})
+		} else {
+			await command.permissions.add({permissions: [{id: newRole.id, type: 'ROLE', permission: true}]})
+		}
+	}
+
+	const globalCommands = client.globalCommands
+	for (const commandId of globalCommands.keys()) {
+		const command = globalCommands.get(commandId)
+		const commandData = client.commands.get(command.name)
+		if (!commandData.permissions) continue;
+		if ((commandData.permissions.bot && !botMember.permissions.has(commandData.permissions.bot)) || (commandData.permissions.member && !newRole.permissions.has(commandData.permissions.member))) {
+			await command.permissions.remove({guild: guild.id, roles: newRole.id})
+		} else {
+			await command.permissions.add({guild: guild.id, permissions: [{id: newRole.id, type: 'ROLE', permission: true}]})
+		}
+	}
+})
+
+// when added to a guild
+client.on('guildCreate', async guild => {
+	const guildCommands = []
+	for (const commandName of client.commands.keys()) {
+		const commandData = client.commands.get(commandName)
+		if (!commandData.guilds || !commandData.guilds.includes(guild.id)) continue;
+		const requestData = {
+			name: commandName,
+			description: commandData.description,
+			options: commandData.options || undefined,
+			defaultPermission: !commandData.guild_only // if the command is only for guilds, prevent access by default (in DMs)
+		}
+		guildCommands.push(requestData)
+	}
+	const guildApplicationCommands = await client.application.commands.set(guildCommands, guild.id)
+	client.guildCommands.set(guild.id, guildApplicationCommands);
+	
+	for (const commandId of guildApplicationCommands.keys()) {
+		const guildApplicationCommand = guildApplicationCommands.get(commandId);
+		const commandName = guildApplicationCommand.name
+		const commandData = client.commands.get(commandName)
+		if (commandData) {
+			commandData.applicationCommands = commandData.applicationCommands ?? []
+			commandData.applicationCommands.push(guildApplicationCommand)
+		}
+	}
+	await updateGuildPermissions(guild.id)
+})
+
+async function updateAllSlashCommands() {
+	// build arrays of global commands and guild commands
+	const globalCommands = []
+	const guildCommands = {}
+	const guilds = await client.guilds.fetch()
+	for (const guildId of guilds.keys()) { // add a guild commands array for each guild the client is in
+		guildCommands[guildId.toString()] = []
+	}
+	for (const commandName of client.commands.keys()) { // for each of the commands in the collection
+		const commandData = client.commands.get(commandName) // get the command
+		const requestData = { // data for this command, sent later to discord to update
+			name: commandName,
+			description: commandData.description,
+			options: commandData.options || undefined,
+			defaultPermission: !commandData.guild_only // if the command is only for guilds, prevent access by default (in DMs)
+		}
+		if (commandData.guilds) { // if this command is specific to certain guilds
+			for (let i = 0; i < commandData.guilds.length; i++) { // only push it to the arrays for those guilds
+				const guildId = commandData.guilds[i]
+				guildCommands[guildId]?.push(requestData)
+			}
+		} else { // otherwise
+			globalCommands.push(requestData) // add it to the global commands
+		}
+	}
+	for (const guildId of guilds.keys()) { // for each guild
+		const guildApplicationCommands = await client.application.commands.set(guildCommands[guildId], guildId)
+		client.guildCommands.set(guildId, guildApplicationCommands); // update their slash commands using the array we built
+		
+		for (const commandId of guildApplicationCommands.keys()) { // update command data with the command ids that got returned
+			const guildApplicationCommand = guildApplicationCommands.get(commandId);
+			const commandName = guildApplicationCommand.name
+			const commandData = client.commands.get(commandName)
+			if (commandData) {
+				commandData.applicationCommands = commandData.applicationCommands ?? []
+				commandData.applicationCommands.push(guildApplicationCommand)
+			}
+		}
+	}
+	const globalApplicationCommands = await client.application.commands.set(globalCommands)
+	client.globalCommands = globalApplicationCommands; // update the global slash commands (discord takes up to 1 hour to do this in every server)
+	for (const commandId of globalApplicationCommands.keys()) {
+		const globalApplicationCommand = globalApplicationCommands.get(commandId);
+		const commandName = globalApplicationCommand.name
+		const commandData = client.commands.get(commandName)
+		if (commandData) commandData.applicationCommands = [globalApplicationCommand]
+	}
+}
+
+client.once('ready', async () => { // when the bot logs in
+  if (!client.application?.owner) await client.application?.fetch(); // idk the guide says this is necessary
+
+	await updateAllSlashCommands()
+
+	for (const guildId of client.guilds.cache.keys()) { // for each guild
+		await updateGuildPermissions(guildId) // update their slash command permissions
+	}
+});
+
+client.on('interactionCreate', async interaction => { // when an interaction occurs (we're interested in slash command interactions)
+	if (!interaction.isCommand()) {
+		if (!interaction.isMessageComponent) return;
+		const custom_id = interaction.customId
+		const commandName = custom_id.split('-')[0]
+		if (!commandName) return;
+		const commandData = client.commands.get(commandName);
+		if (!commandData) return await interaction.reply({content: "I got lost while processing that. You should probably tell DarkVoid because he didn't expect this message to get shown.", ephemeral: true})
+		try {
+			await commandData.executeComponent(interaction);
+		} catch (error) {
+			console.error(error);
+			if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
+				await interaction.editReply('An error occurred while handling your interaction.');
+			} else {
+				await interaction.reply({content: 'An error occurred while handling your interaction.', ephemeral: true});
+			}
+		}
+		return;
+	}
+
+	const commandName = interaction.commandName;
+
+	const commandData = client.commands.get(commandName); // find the command in the collection
+
+	if (!commandData) return; // this would be problematic (most likely to happen if global commands haven't updated yet - but discord shouldn't send interactions for old commands so this is just a precaution)
+
+	if ((commandData.guild_only) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}); // handle guild only commands (currently only /ping is non-guild)
+
+	if (interaction.inGuild() && commandData.permissions) {
+		if (commandData.permissions.member && !interaction.member.permissionsIn(interaction.channel).has(commandData.permissions.member)) return await interaction.reply({content: "You don't have permission to use that command.", ephemeral: true})
+		if (commandData.permissions.bot) {
+			const botMember = await interaction.guild.members.fetch(client.user.id)
+			if (!botMember.permissionsIn(interaction.channel).has(commandData.permissions.bot)) return await interaction.reply({content: "I don't have the required permissions for that command.", ephemeral: true})
+		}
+	}
+
+	if (commandData.threadOnly && !interaction.channel.isThread()) return await interaction.reply({content: "This command can only be used in a thread.", ephemeral: true})
+
+	// handle command cooldowns
+	const { cooldowns } = client;
+
+	if (!cooldowns.has(commandData.name)) {
+		cooldowns.set(commandData.name, new Collection());
+	}
+
+	const now = Date.now();
+	const timestamps = cooldowns.get(commandData.name);
+	const cooldownAmount = (commandData.cooldown ?? 3) * 1000;
+
+	if (timestamps.has(interaction.user.id)) {
+		const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
+
+		if (now < expirationTime) {
+			const timeLeft = (expirationTime - now) / 1000;
+			return interaction.reply({content: `Please wait ${timeLeft.toFixed(1)} more second(s) before reusing \`/${commandName}\``, ephemeral: true});
+		}
+	}
+
+	timestamps.set(interaction.user.id, now);
+	setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+
+	// execute the command, catch any errors
+	try {
+		await commandData.execute(interaction);
+	} catch (error) {
+		console.error(error);
+		if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
+			await interaction.editReply('There was an error trying to execute that command!');
+		} else {
+			await interaction.reply({content: 'There was an error trying to execute that command!', ephemeral: true});
+		}
+	}
+});
+
+const stayAwake = require('stay-awake');
+
+const currentDate = new Date()   
+
+const startDate = new Date(currentDate.getTime());
+startDate.setHours(9);
+startDate.setMinutes(15);
+startDate.setSeconds(0);
+
+const endDate = new Date(currentDate.getTime());
+endDate.setHours(22);
+endDate.setMinutes(0);
+endDate.setSeconds(0);
+
+
+if (startDate < currentDate && currentDate < endDate) {
+	stayAwake.prevent()
+}
+
+const cron = require('node-cron');
+
+cron.schedule('15 9 * * *', () => {
+	stayAwake.prevent()
+});
+
+cron.schedule('0 22 * * *', () => {
+	stayAwake.allow()
+});
+
+client.login(process.env.BOT_TOKEN);

@@ -1,0 +1,24 @@
+{
+  "name": "voidbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "chokidar": "^3.5.2",
+    "discord.js": "^13.0.0-dev.4f1f32f.1627517033",
+    "dotenv": "^8.2.0",
+    "enmap": "^5.8.7",
+    "mineflayer": "^3.6.0",
+    "node-cron": "^3.0.0",
+    "public-ip": "^4.0.4",
+    "stay-awake": "^0.0.3",
+    "sv443-joke-api": "^0.1.0"
+  }
+}
