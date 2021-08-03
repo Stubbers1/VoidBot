@@ -24,8 +24,12 @@ module.exports = {
       hand.push(deck.splice(getRandomInt(0, deck.length), 1)[0]);
     }
     const value = getValue(hand);
-    let content = `You got dealt the **${getName(hand[0])}** and the **${getName(hand[1])}**.\nValue: ${value}`
-    if (value === 21) content += " - Blackjack!";
+    let content = `You got dealt the **${getName(hand[0])}** and the **${getName(hand[1])}**.\n`
+    if (value === 21) {
+      content += "Blackjack!"
+    } else {
+      content += `Value: ${value}\nChoose to hit (get another card) or stick (stop with your current hand):`
+    }
     const components = [
       {
         type: 'ACTION_ROW',
@@ -66,14 +70,14 @@ module.exports = {
 
     const value = getValue(hand);
 
-    let content = `Hand: **${hand.map(getName).join('**, **')}**.`
+    let content = `Hand: **${hand.map(getName).join('**, **')}**.\n`
 
     if (value === 21) {
-      content += "\nBlackjack!"
+      content += "Blackjack!"
     } else if (value > 21) {
-      content += "\nBust!"
+      content += "Bust!"
     } else {
-      content += `\nValue: ${value}`
+      content += `Value: ${value}`
     }
 
     const components = (value >= 21 || action === "stick") ? [] : interaction.message.components.map(component => component.toJSON());
