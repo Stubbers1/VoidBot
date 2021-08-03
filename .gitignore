@@ -104,7 +104,6 @@ dist
 .tern-port
 
 servers/
-writingCommands/
 data/
 launcher_accounts.json
 *.exe
