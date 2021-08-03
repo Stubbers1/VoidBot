@@ -30,7 +30,7 @@ async function updateApplicationCommands() {
   const commandIds = client.command_data.get('server', 'ids')
   for (const guildId of Object.keys(commandIds)) {
     const commandId = commandIds[guildId]
-    client.application.commands.edit(commandId, commandData, guildId);
+    client.application.commands.edit(commandId, {options: commandModule.options}, guildId);
   }
 }
 
