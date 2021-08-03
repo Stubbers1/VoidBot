@@ -66,11 +66,15 @@ module.exports = {
 
     const value = getValue(hand);
 
-    let content = `Hand: **${hand.map(getName).join('**, **')}**.\nValue: ${value}`
+    let content = `Hand: **${hand.map(getName).join('**, **')}**.`
 
-    if (value === 21) content += "\nBlackjack!"
-    if (value > 21) content += "\nBust!"
-    if (action === "stick") content += "\nYou chose to stick."
+    if (value === 21) {
+      content += "\nBlackjack!"
+    } else if (value > 21) {
+      content += "\nBust!"
+    } else {
+      content += `\nValue: ${value}`
+    }
 
     const components = (value >= 21 || action === "stick") ? [] : interaction.message.components.map(component => component.toJSON());
     if (components.length > 0) components[0].components[0].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;

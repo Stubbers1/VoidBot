@@ -23,6 +23,7 @@ function shuffle(array) {
   return array;
 }
 
+// get a card based on its index within the deck
 function getCard(index, wildColour) {
   if (index < 100) {
     return [colours[(index % 4)], names[Math.floor(((index % 25) + 1) / 2)]]
@@ -32,6 +33,7 @@ function getCard(index, wildColour) {
   return card
 }
 
+// get how a card should be displayed
 function getName(card) {
   let name = card.slice(0, 2).join(" ")
   if (card.length > 2) {
@@ -40,6 +42,7 @@ function getName(card) {
   return name
 }
 
+// check if a card is playable based on the card, the top card in the discard and if there is a requirement to draw cards at the moment
 function isPlayable(card, topCard, drawRequirement) {
   if (drawRequirement && card[1] !== "+2") return false;
   if (card[0] === "wild" || card[0] === topCard[0] || card[1] === topCard[1]) return true;
@@ -47,6 +50,7 @@ function isPlayable(card, topCard, drawRequirement) {
   return false;
 }
 
+// increment the turn counter (taking reverse into account)
 function incrementTurn(channelId) {
   if (game_states.get(channelId, 'reversed')) return game_states.dec(channelId, 'turn')
   return game_states.inc(channelId, 'turn')
@@ -58,8 +62,8 @@ const game_states = new Enmap({
   autoFetch: true,
   cloneLevel: 'deep'
 });
-//game_states.clear()
 
+// deal n random cards from the deck to a player
 function dealCards(channelId, playerId, no = 1) {
   let deck = game_states.observe(channelId, 'deck')
   const hand = game_states.observe(channelId, `hands.${playerId}`)
@@ -76,12 +80,14 @@ function dealCards(channelId, playerId, no = 1) {
   return dealtCards
 }
 
+// discard a card from a player's hand
 function discardCard(channelId, playerId, cardIndex) {
   game_states.remove(channelId, cardIndex, `hands.${playerId}`)
   const discard = game_states.observe(channelId, 'discard')
-  discard.unshift(cardIndex)
+  discard.unshift(cardIndex) // add to the start discard
 }
 
+// various button structures
 const join_game_button = {
   type: 'BUTTON',
   label: "Join",
@@ -126,7 +132,7 @@ module.exports = {
     const channelId = interaction.channelId
     if (game_states.has(channelId)) return await interaction.reply({content: "There is already a game in this channel!", ephemeral: true})
 
-    game_states.set(channelId, {owner: interaction.user.id, players: []})
+    game_states.set(channelId, {owner: interaction.user.id, players: []}) // set the game state to pre-game state
     await interaction.reply({
       content: "An Uno game is starting!",
       components: [
@@ -152,8 +158,8 @@ module.exports = {
     let players, numPlayers, dealtCards, hand, topCardIndex, wildColour, newDrawRequirement, topCard, turn, playerIndex, components, chosenCardIndexString, chosenCardIndex, chosenCard, isTurn, chosenColour
     let actionType = custom_id.split('-')[1]
     let content = ""
-    switch (custom_id.split('-')[1]) {
-      case 'join':
+    switch (actionType) {
+      case 'join': // someone joins the game
         if (game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're already in this game!", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
         await interaction.defer()
@@ -163,9 +169,10 @@ module.exports = {
         numPlayers = players.length
 
         return await interaction.editReply({content: `<@${interaction.user.id}> joined the game!`, allowedMentions: {parse: []}});
-      case 'leave':
+      case 'leave': // someone leaves the game
         if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
+        
         await interaction.defer()
         game_states.remove(channelId, interaction.user.id, 'players')
 
@@ -173,9 +180,10 @@ module.exports = {
         numPlayers = players.length
 
         return await interaction.editReply({content: `<@${interaction.user.id}> left the game.`, allowedMentions: {parse: []}});
-      case 'start':
+      case 'start': // starting the game
         if (game_states.get(channelId, 'owner') !== interaction.user.id && !interaction.member.permissionsIn(interaction.channel).has('MANAGE_CHANNELS')) return await interaction.reply({content: "Only the user who created the game can start it.", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
+        
         players = game_states.get(channelId, 'players')
         numPlayers = players.length
         if (2 > numPlayers || numPlayers > 10) return await interaction.reply({content: "An Uno game must have 2-10 players to start.", ephemeral: true});
@@ -208,14 +216,16 @@ module.exports = {
           allowedMentions: {users: players}
         })
         return;
-      case 'cancel':
+      case 'cancel': // cancelling the game
         if (game_states.get(channelId, 'owner') !== interaction.user.id && !interaction.member.permissionsIn(interaction.channel).has('MANAGE_CHANNELS')) return await interaction.reply({content: "Only the user who created the game can cancel it.", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
+        
         game_states.delete(channelId)
         return await interaction.reply(`The game was cancelled by <@${interaction.user.id}>.`)
-      case 'hand':
+      case 'hand': // show a player's hand
         if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
         if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
+       
         turn = game_states.get(channelId, 'turn');
         players = game_states.get(channelId, 'players')
         numPlayers = players.length
@@ -335,8 +345,7 @@ module.exports = {
           }
         }
         return;
-      case 'play':
-      case 'playwild':
+      case 'play': // someone plays a card
         if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
         if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
         turn = game_states.get(channelId, 'turn');
@@ -367,7 +376,7 @@ module.exports = {
                 type: 'BUTTON',
                 style: 'PRIMARY',
                 label: colour,
-                custom_id: `uno-playwild-${chosenCardIndex}-${colour}`
+                custom_id: `uno-play-${chosenCardIndex}-${colour}`
               }))
             }
           ],
@@ -403,6 +412,7 @@ module.exports = {
           content += ` They now have **${hand.length}** cards.`
         }
 
+        // handle special cards
         if (chosenCard[1] === 'skip') {
           content += "\nThe next player's turn was skipped."
           incrementTurn(channelId);
@@ -423,10 +433,11 @@ module.exports = {
           content += "."
         }
         break;
-      default:
-        if (!actionType.startsWith('draw')) return;
+      default: // someone draws a card
+        if (!actionType.startsWith('draw')) return await interaction.reply({content: "That button isn't what I expected.", ephemeral: true}); // if someone presses an old button it could have a different custom id - ignore it
         if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
         if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
+        
         turn = game_states.get(channelId, 'turn');
         players = game_states.get(channelId, 'players')
         numPlayers = players.length
@@ -488,7 +499,7 @@ module.exports = {
           }
           await interaction.reply({content: `You drew a **${getName(drawnCard)}**.`, ephemeral: true});
         }
-      case 'end':
+      case 'end': // someone ends their turn after drawing a card
         if (actionType === 'end') {
           if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
           if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
@@ -514,7 +525,7 @@ module.exports = {
         numPlayers = players.length
         break;
     }
-    incrementTurn(channelId);
+    incrementTurn(channelId); // increment the turn count
 
     const nextTurn = game_states.get(channelId, 'turn');
     const nextPlayer = game_states.get(channelId, `players.${mod(nextTurn, numPlayers)}`);
