@@ -10,7 +10,8 @@ client.command_data = new Enmap({
   fetchAll: true,
   autoFetch: true,
   cloneLevel: 'deep',
-	autoEnsure: false
+	autoEnsure: false,
+	autoEnsure: {ids: {}}
 });
 client.cooldowns = new Collection(); // stores the last time a user used a command
 // per-guild settings
@@ -81,12 +82,10 @@ async function getCommandPermissions(guild, commandModule) {
 	return commandPermissions
 }
 
-async function getCommandId(name, guildId) {
+function getCommandId(name, guildId) {
 	const id = client.command_data.get(name, 'id')
 	if (id !== undefined) return id
-	const ids = client.command_data.get(name, 'ids')
-	if (ids === undefined) return;
-	return ids[guildId]
+	return client.command_data.get(name, `ids.${guildId}`)
 }
 
 function getCommandById(id, guildId) { // *returns a promise*
@@ -100,6 +99,8 @@ async function getGuildPermissions(guild) {
 	// for each command
 	for (const commandName of client.commands.keys()) {
 		const commandModule = client.commands.get(commandName)
+		const commandId = getCommandId(commandName, guild.id)
+		if (commandId === undefined) continue;
 		const commandPermissions = await getCommandPermissions(guild, commandModule) // get the command's permissions within the guild
 		permissions.push({id: commandId, permissions: commandPermissions}) // push those permissions to the array
 	}
@@ -146,9 +147,9 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 })
 
 // check if a role's permissions have changed for a specific command
-function checkRolePermissions(role, command, botMember) {
+async function checkRolePermissions(role, command, botMember) {
 	const commandModule = client.commands.get(command.name)
-	if (!commandModule.permissions) continue; // if the command doesn't have any permissions, move on
+	if (!commandModule.permissions) return; // if the command doesn't have any permissions, move on
 	// if there is a lack of bot permissions OR member permissions, deny permission
 	if ((commandModule.permissions.bot && !botMember.permissions.has(commandModule.permissions.bot)) || (commandModule.permissions.member && !role.permissions.has(commandModule.permissions.member))) {
 		await command.permissions.remove({guild: role.guild.id, roles: role.id})
@@ -174,7 +175,7 @@ client.on('roleUpdate', async (oldRole, newRole) => { // if a role is updated, t
 		const commandId = getCommandId(commandName, guild.id)
 		if (commandId === undefined) continue;
 		const command = getCommandById(commandId, guild.id)
-		checkRolePermissions(newRole, command, botMember)
+		await checkRolePermissions(newRole, command, botMember)
 	}
 })
 
@@ -194,14 +195,7 @@ client.on('guildCreate', async guild => {
 		guildCommands.push(requestData)
 	}
 	const guildApplicationCommands = await client.application.commands.set(guildCommands, guild.id) // set these commands on discord
-	client.guildCommands.set(guild.id, guildApplicationCommands); // update our guild commands collection with the application commands we received.
-	
 
-	// for each command
-	for (const commandName of client.commands.keys()) {
-		const commandId = getCommandId(commandName, guild.id)
-		if (commandId === undefined) continue;
-	}
 	// update the application command ids in the collection of command data
 	for (const commandId of guildApplicationCommands.keys()) {
 		const guildApplicationCommand = guildApplicationCommands.get(commandId);
@@ -239,7 +233,6 @@ async function updateAllSlashCommands() {
 	}
 	for (const guildId of guilds.keys()) { // for each guild
 		const guildApplicationCommands = await client.application.commands.set(guildCommands[guildId], guildId)
-		client.guildCommands.set(guildId, guildApplicationCommands); // update their slash commands using the array we built
 		
 		for (const commandId of guildApplicationCommands.keys()) { // update command data with the command ids that got returned
 			const guildApplicationCommand = guildApplicationCommands.get(commandId);
