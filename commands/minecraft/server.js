@@ -22,15 +22,15 @@ for (let i = 0; i < minecraftServerFolders.length; i++) {
   aliases[dirName] = alias
 }
 
-// the following code watches for updates to servers and their aliases in order to update the command whenever this happens
+// the following code watches for updates to servers and their aliases in order to update the command choices whenever this happens
 
 async function updateApplicationCommands() {
-  const commandData = client.commands.get('server')
-  commandData.options[0].options[0].choices = getChoices()
-  const applicationCommands = commandData.applicationCommands
-  for (let i = 0; i < applicationCommands.length; i++) {
-    const applicationCommand = applicationCommands[i];
-    await applicationCommand.edit(commandData)
+  const commandModule = client.commands.get('server')
+  commandModule.options[0].options[0].choices = getChoices()
+  const commandIds = client.command_data.get('server', 'ids')
+  for (const guildId of Object.keys(commandIds)) {
+    const commandId = commandIds[guildId]
+    client.application.commands.edit(commandId, commandData, guildId);
   }
 }
 
