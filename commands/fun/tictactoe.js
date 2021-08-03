@@ -49,6 +49,7 @@ module.exports = {
         ]
       },
     ]
+    // if the opponent is the bot, make a random move
     if (opponent.id === client.user.id) {
       const i = getRandomInt(0, 3)
       const j = getRandomInt(0, 3)
@@ -67,13 +68,14 @@ module.exports = {
     if (!interaction.isButton()) return;
 
     const custom_id = interaction.customId
-    const [ game, coords, challengerId, opponentId ] = custom_id.split('-')
+    const [ game, coords, challengerId, opponentId ] = custom_id.split('-') // split up the custom id to get the individual pieces of data
     const [ x, y ] = coords
 
     let challenger_plays = 0, opponent_plays = 0;
 
     let finished = true
     let buttonPressed
+    // count the plays already made by each player & check if the entire board is disabled
     for (let actionRow of interaction.message.components) {
       for (let button of actionRow.components) {
         if (button.label === 'X') challenger_plays++;
@@ -90,38 +92,54 @@ module.exports = {
 
     if (buttonPressed.label !== '-') return await interaction.reply({content: "You must play in an empty space!", ephemeral: true})
 
-    await interaction.deferUpdate();
+    await interaction.deferUpdate(); // let discord know we're gonna edit the message... soon
 
+    // update the button
     buttonPressed.label = challenger_turn ? 'X' : 'O';
     buttonPressed.style = challenger_turn ? "SUCCESS" : "DANGER";
     buttonPressed.disabled = true;
 
-    const components = interaction.message.components.map(component => component.toJSON());
+    // increment the number of plays made
+    if (challenger_turn) {
+      challenger_plays++;
+    } else {
+      opponent_plays++;
+    }
+    challenger_turn = !challenger_turn // swap the turn
+
+    const components = interaction.message.components.map(component => component.toJSON()); // convert the message components back to JSON
 
     let botPlayCoords;
+    // if the bot player needs to make a move
+    // note that we haven't checked if the human player has won yet; we'll revert this play if they have
     if (opponentId === client.user.id) {
-      const options = 8 - challenger_plays - opponent_plays
-      const chosen_position = getRandomInt(1, options + 1)
-      let current_position = 0
-      outerLoop:
-        for (let actionRow of components) {
-          for (let button of actionRow.components) {
-            if (button.label === '-') current_position++;
-            if (current_position === chosen_position) {
-              button.label = 'O';
-              button.style = 'DANGER';
-              button.disabled = true;
-              botPlayCoords = button.custom_id.split('-')[0]
-              break outerLoop;
+      const options = 9 - challenger_plays - opponent_plays
+      if (options > 0) { // this check should never fail because the bot plays first and last
+        const chosen_position = getRandomInt(0, options) + 1 // pick a random space given the number of options
+        let current_position = 0
+        // loop through the components to find the nth empty space according to chosen_position
+        outerLoop:
+          for (let actionRow of components) {
+            for (let button of actionRow.components) {
+              if (button.label === '-') current_position++;
+              if (current_position === chosen_position) {
+                button.label = 'O';
+                button.style = 'DANGER';
+                button.disabled = true;
+                botPlayCoords = button.custom_id.split('-')[0]
+                break outerLoop;
+              }
             }
           }
-        }
-      challenger_plays++;
-      challenger_turn = false;
+        opponent_plays++; // increment the number of plays made
+        challenger_turn = !challenger_turn; // swap the turn (again)
+      }
     }
 
+    // check if someone has won
     let winner = undefined
 
+    // check the rows
     for(var i = 0; i < 3; i++){
       var rowSum = 0;
       for (var j = 0; j < 3; j++) {
@@ -131,6 +149,7 @@ module.exports = {
       if (winner !== challengerId && rowSum === -3) winner = opponentId
     }
 
+    // check the columns
     for(var i = 0; i < 3; i++){
       var colSum = 0;
       for (var j = 0; j < 3; j++) {
@@ -146,7 +165,7 @@ module.exports = {
     if (getValue(components[2].components[0].label) + getValue(components[1].components[1].label) + getValue(components[0].components[2].label) === 3) winner = challengerId
     if (winner !== challengerId && getValue(components[2].components[0].label) + getValue(components[1].components[1].label) + getValue(components[0].components[2].label) === -3) winner = opponentId
     
-    if (winner !== challengerId && challenger_plays + opponent_plays === 8) winner = null
+    if (winner !== challengerId && challenger_plays + opponent_plays === 9) winner = null // if all
 
     let content = ""
 
