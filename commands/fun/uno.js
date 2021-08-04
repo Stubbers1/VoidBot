@@ -232,8 +232,8 @@ module.exports = {
       const wildColour = game_states.get(channelId, 'wild_colour')
       const topCard = getCard(topCardIndex, wildColour)
 
-      content = `The current card is a **${getName(topCard)}**.\n`
-      components = []
+      let content = `The current card is a **${getName(topCard)}**.\n`
+      const components = []
       if (isTurn) {
         drawRequirement = game_states.get(channelId, 'draw_requirement');
         if (topCard[1] === "+4" && drawRequirement === 4) {
@@ -275,7 +275,7 @@ module.exports = {
       row = components.length;
       column = 0;
       let allDisabled = true;
-      drawnCardIndex = game_states.get(channelId, 'drawn_card');
+      const drawnCardIndex = game_states.get(channelId, 'drawn_card');
       for (let i = 0; i < hand.length; i++) {
         const cardIndex = hand[i];
         const card = getCard(cardIndex);
@@ -340,6 +340,7 @@ module.exports = {
           })
         }
       }
+      return;
     }
     // the following actions (play, draw) must occur on the player's turn
     if (!isTurn) return await interaction.reply({content: "It isn't your turn!", ephemeral: true});
@@ -431,7 +432,6 @@ module.exports = {
       default: // someone draws a card
         if (!actionType.startsWith('draw')) return await interaction.reply({content: "That button isn't what I expected.", ephemeral: true}); // if someone presses an old button it could have a different custom id - ignore it
 
-        [ game, actionType, chosenCardIndexString ] = custom_id.split('-')
         hand = game_states.get(channelId, `hands.${interaction.user.id}`)
         const topCardIndex = game_states.get(channelId, 'discard.0');
         const wildColour = game_states.get(channelId, 'wild_colour') ?? null;
