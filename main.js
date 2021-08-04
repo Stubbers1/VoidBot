@@ -2,7 +2,6 @@ require('dotenv').config({ path: ".env" })
 const fs = require('fs');
 const { Client, Intents, Collection, Message } = require('discord.js');
 const Enmap = require('enmap');
-const util = require('util');
 
 client = new Client({intents: [Intents.FLAGS.GUILDS]});
 client.commands = new Collection();
@@ -10,13 +9,35 @@ client.command_data = new Enmap({
   fetchAll: true,
   autoFetch: true,
   cloneLevel: 'deep',
-	autoEnsure: false,
 	autoEnsure: {ids: {}}
+});
+// enmap to store user data (at the moment, game stats)
+client.user_data = new Enmap({
+	name: 'user_data',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+		stats: {
+			uno: {
+				wins: 0,
+				played: 0
+			},
+			tictactoe: {
+				wins: 0,
+				played: 0
+			},
+			rps: {
+				wins: 0,
+				played: 0
+			}
+		}
+	} // default user data goes here
 });
 client.cooldowns = new Collection(); // stores the last time a user used a command
 // per-guild settings
-client.guild_settings = new Enmap({
-  name: "settings",
+client.guild_data = new Enmap({
+  name: 'guild_data',
   fetchAll: false,
   autoFetch: true,
   cloneLevel: 'deep',
@@ -25,7 +46,7 @@ client.guild_settings = new Enmap({
 
 // settings for scheduled tasks such as preventing auto-archiving threads
 client.scheduled_settings = new Enmap({
-  name: "scheduled_tasks",
+  name: 'scheduled_tasks',
   fetchAll: true,
   autoFetch: true,
   cloneLevel: 'deep'
@@ -332,6 +353,14 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 		}
 	}
 });
+
+const publicIp = require('public-ip');
+const https = require('https');
+
+setInterval(async function() {
+  let ip = await publicIp.v4();
+  https.get(`https://dynamicdns.park-your-domain.com/update?host=${process.env.DDNS_HOST}&domain=${process.env.DDNS_DOMAIN}&password=${process.env.DDNS_PASSWORD}&ip=${ip}`)
+}, 30000)
 
 const stayAwake = require('stay-awake');
 

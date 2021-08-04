@@ -64,7 +64,7 @@ module.exports = {
     if (!interaction.isButton()) return;
     
     const custom_id = interaction.customId
-    const [ game, choiceString, challengerId, opponentId ] = custom_id.split('-')
+    const [ , choiceString, challengerId, opponentId ] = custom_id.split('-')
     const choice = parseInt(choiceString)
 
     if (interaction.user.id !== challengerId && interaction.user.id !== opponentId) return await interaction.reply({content: "You're not part of this game!", ephemeral: true})
@@ -82,11 +82,17 @@ module.exports = {
     game_states.delete(interaction.message.interaction.id)
 
     let content = `<@${challengerId}> chose **${choicesMap[challengerChoice]}**.\n<@${opponentId}> chose **${choicesMap[opponentChoice]}**.\n`
+    client.user_data.ensure(challengerId)
+    client.user_data.ensure(opponentId)
+    client.user_data.inc(challengerId, 'stats.rps.played')
+    client.user_data.inc(opponentId, 'stats.rps.played')
     if (challengerChoice === opponentChoice) {
       content += `Draw!`
     } else if (challengerChoice === (opponentChoice + 1) % 3) {
+      client.user_data.inc(challengerId, 'stats.rps.wins')
       content += `<@${challengerId}> wins!`
     } else {
+      client.user_data.inc(opponentId, 'stats.rps.wins')
       content += `<@${opponentId}> wins!`
     }
     await interaction.update({content: content, allowedMentions: {parse: []}, components: []})
