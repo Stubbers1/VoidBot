@@ -13,10 +13,32 @@ client.command_data = new Enmap({
 	autoEnsure: false,
 	autoEnsure: {ids: {}}
 });
+client.user_data = new Enmap({
+	name: 'user_data',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+		stats: {
+			uno: {
+				wins: 0,
+				played: 0
+			},
+			tictactoe: {
+				wins: 0,
+				played: 0
+			},
+			rps: {
+				wins: 0,
+				played: 0
+			}
+		}
+	} // default user data goes here
+})
 client.cooldowns = new Collection(); // stores the last time a user used a command
 // per-guild settings
-client.guild_settings = new Enmap({
-  name: "settings",
+client.guild_data = new Enmap({
+  name: 'guild_data',
   fetchAll: false,
   autoFetch: true,
   cloneLevel: 'deep',
@@ -25,7 +47,7 @@ client.guild_settings = new Enmap({
 
 // settings for scheduled tasks such as preventing auto-archiving threads
 client.scheduled_settings = new Enmap({
-  name: "scheduled_tasks",
+  name: 'scheduled_tasks',
   fetchAll: true,
   autoFetch: true,
   cloneLevel: 'deep'
