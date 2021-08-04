@@ -2,7 +2,6 @@ require('dotenv').config({ path: ".env" })
 const fs = require('fs');
 const { Client, Intents, Collection, Message } = require('discord.js');
 const Enmap = require('enmap');
-const util = require('util');
 
 client = new Client({intents: [Intents.FLAGS.GUILDS]});
 client.commands = new Collection();
@@ -34,7 +33,7 @@ client.user_data = new Enmap({
 			}
 		}
 	} // default user data goes here
-})
+});
 client.cooldowns = new Collection(); // stores the last time a user used a command
 // per-guild settings
 client.guild_data = new Enmap({
@@ -354,6 +353,14 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 		}
 	}
 });
+
+const publicIp = require('public-ip');
+const https = require('https');
+
+setInterval(async function() {
+  let ip = await publicIp.v4();
+  https.get(`https://dynamicdns.park-your-domain.com/update?host=${process.env.DDNS_HOST}&domain=${process.env.DDNS_DOMAIN}&password=${process.env.DDNS_PASSWORD}&ip=${ip}`)
+}, 30000)
 
 const stayAwake = require('stay-awake');
 

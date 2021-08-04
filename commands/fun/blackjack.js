@@ -15,7 +15,7 @@ function getName(card) {
 module.exports = {
 	name: 'blackjack',
 	description: 'Start a game of blackjack',
-	cooldown: 60,
+	cooldown: 30,
 	async execute(interaction) {
     const player = interaction.user
     const deck = Array.from(Array(52).keys())
@@ -36,15 +36,15 @@ module.exports = {
         components: [
           {
             type: 'BUTTON',
-            label: 'Stick',
-            custom_id: `blackjack-stick-${player.id}-${hand.join(',')}`,
-            style: 'PRIMARY'
-          },
-          {
-            type: 'BUTTON',
             label: 'Hit',
             custom_id: `blackjack-hit-${player.id}-${hand.join(',')}`,
             style: 'DANGER'
+          },
+          {
+            type: 'BUTTON',
+            label: 'Stick',
+            custom_id: `blackjack-stick-${player.id}-${hand.join(',')}`,
+            style: 'PRIMARY'
           }
         ]
       }

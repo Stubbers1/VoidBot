@@ -43,7 +43,9 @@ function getName(card) {
 }
 
 // check if a card is playable based on the card, the top card in the discard and if there is a requirement to draw cards at the moment
-function isPlayable(card, topCard, drawRequirement) {
+function isPlayable(channelId, card) {
+  const topCard = getTopCard(channelId);
+  const drawRequirement = game_states.get(channelId, 'draw_requirement');
   if (drawRequirement && card[1] !== "+2") return false;
   if (card[0] === "wild" || card[0] === topCard[0] || card[1] === topCard[1]) return true;
   if (topCard[0] === "wild" && card[0] === topCard[2]) return true;
@@ -80,11 +82,50 @@ function dealCards(channelId, playerId, no = 1) {
   return dealtCards
 }
 
+function getTopCard(channelId) {
+  const topCardIndex = game_states.get(channelId, 'discard.0');
+  const wildColour = game_states.get(channelId, 'wild_colour');
+  return getCard(topCardIndex, wildColour);
+}
+
 // discard a card from a player's hand
 function discardCard(channelId, playerId, cardIndex) {
   game_states.remove(channelId, cardIndex, `hands.${playerId}`)
   const discard = game_states.observe(channelId, 'discard')
   discard.unshift(cardIndex) // add to the start discard
+}
+
+function startGame(channelId) {
+  game_states.set(channelId, 0, 'turn')
+  game_states.set(channelId, false, 'reversed')
+
+  const topCardIndex = getRandomInt(0, 4) * 25 + getRandomInt(0, 19);
+  game_states.set(channelId, [topCardIndex], 'discard')
+
+  game_states.set(channelId, Array.from(Array(108).keys()).filter(card => card !== topCardIndex), 'deck');
+
+  const players = game_states.observe(channelId, 'players')
+  shuffle(players)
+
+  for (let i = 0; i < players.length; i++) {
+    const playerId = players[i]
+    game_states.set(channelId, [], `hands.${playerId}`)
+    dealCards(channelId, playerId, 7)
+  }
+
+  return players
+}
+
+function endGame(channelId) {
+  const players = game_states.get(channelId, 'players')
+
+  for (let i = 0; i < players.length; i++) {
+    const playerId = players[i]
+    client.user_data.inc(playerId, 'uno.played')
+    if (game_states.get(channelId, `hands.${playerId}`).length === 0) client.user_data.inc(playerId, 'uno.wins');
+  }
+
+  game_states.delete(channelId)
 }
 
 // various button structures
@@ -181,25 +222,11 @@ module.exports = {
         if (game_states.get(channelId, 'owner') !== interaction.user.id && !interaction.member.permissionsIn(interaction.channel).has('MANAGE_CHANNELS')) return await interaction.reply({content: "Only the user who created the game can start it.", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
         
-        const players = game_states.observe(channelId, 'players')
+        let players = game_states.get(channelId, 'players')
         const numPlayers = players.length
         if (2 > numPlayers || numPlayers > 10) return await interaction.reply({content: "An Uno game must have 2-10 players to start.", ephemeral: true});
-        game_states.set(channelId, 0, 'turn')
-        game_states.set(channelId, false, 'reversed')
-
-        const topCardIndex = getRandomInt(0, 4) * 25 + getRandomInt(0, 19);
-        const topCard = getCard(topCardIndex)
-        game_states.set(channelId, [topCardIndex], 'discard')
-
-        game_states.set(channelId, Array.from(Array(108).keys()).filter(card => card !== topCardIndex), 'deck');
-
-        for (let i = 0; i < numPlayers; i++) {
-          const playerId = players[i]
-          game_states.set(channelId, [], `hands.${playerId}`)
-          dealCards(channelId, playerId, 7)
-        }
-
-        shuffle(players)
+        players = startGame(channelId)
+        const topCard = getTopCard(channelId)
 
         await interaction.reply({
           content: `<@${interaction.user.id}> started the game. Turn order: <@${players.join('>, <@')}>.\n<@${players[0]}> will play first, and the top card is a **${getName(topCard)}**.`,
@@ -228,9 +255,7 @@ module.exports = {
     const isTurn = mod(turn, numPlayers) === playerIndex
     if (actionType === 'hand') {
       const hand = game_states.get(channelId, `hands.${interaction.user.id}`);
-      const topCardIndex = game_states.get(channelId, 'discard.0');
-      const wildColour = game_states.get(channelId, 'wild_colour')
-      const topCard = getCard(topCardIndex, wildColour)
+      const topCard = getTopCard(channelId)
 
       let content = `The current card is a **${getName(topCard)}**.\n`
       const components = []
@@ -283,7 +308,7 @@ module.exports = {
           type: 'ACTION_ROW',
           components: []
         })
-        const disabled = !isTurn || !isPlayable(card, topCard, drawRequirement);
+        const disabled = !isTurn || !isPlayable(channelId, card);
         allDisabled = allDisabled && disabled
         components[row].components.push({
           type: 'BUTTON',
@@ -355,11 +380,9 @@ module.exports = {
         
         const chosenCard = getCard(chosenCardIndex, chosenColour);
 
-        const topCardIndex = game_states.get(channelId, 'discard.0');
-        const wildColour = game_states.get(channelId, 'wild_colour') ?? null;
-        const topCard = getCard(topCardIndex, wildColour);
+        const topCard = getTopCard(channelId);
         const drawRequirement = game_states.get(channelId, 'draw_requirement');
-        if (!isPlayable(chosenCard, topCard, drawRequirement)) return await interaction.reply({content: "You can't play that card!", ephemeral: true});
+        if (!isPlayable(channelId, topCard)) return await interaction.reply({content: "You can't play that card!", ephemeral: true});
 
         if (chosenCard[0] === "wild" && !chosenColour) return await interaction.reply({
           content: "What colour should the wild card represent?",
@@ -395,7 +418,7 @@ module.exports = {
         hand = game_states.get(channelId, `hands.${interaction.user.id}`)
         if (hand.length === 0) {
           content += `\n<@${interaction.user.id}> wins!`
-          game_states.delete(channelId)
+          endGame(channelId)
           return await interaction.reply({
             content: content,
             allowedMentions: {parse: []}
@@ -433,9 +456,6 @@ module.exports = {
         if (!actionType.startsWith('draw')) return await interaction.reply({content: "That button isn't what I expected.", ephemeral: true}); // if someone presses an old button it could have a different custom id - ignore it
 
         hand = game_states.get(channelId, `hands.${interaction.user.id}`)
-        const topCardIndex = game_states.get(channelId, 'discard.0');
-        const wildColour = game_states.get(channelId, 'wild_colour') ?? null;
-        const topCard = getCard(topCardIndex, wildColour);
         const drawRequirement = game_states.get(channelId, 'draw_requirement');
 
         if (actionType !== 'draw') { // draw 2+ cards (due to +2 or +4 cards)
@@ -450,7 +470,7 @@ module.exports = {
           break;
         }
         const initialDrawnCardIndex = game_states.get(channelId, 'drawn_card');
-        if (initialDrawnCardIndex === undefined && hand.some(cardIndex => isPlayable(getCard(cardIndex), topCard, drawRequirement))) return await interaction.reply({content: "You can't draw if you can play a card!", ephemeral: true});
+        if (initialDrawnCardIndex === undefined && hand.some(cardIndex => isPlayable(channelId, getCard(cardIndex)))) return await interaction.reply({content: "You can't draw if you can play a card!", ephemeral: true});
         if (initialDrawnCardIndex === undefined) {
           [ drawnCardIndex ] = dealCards(channelId, interaction.user.id);
         } else {
@@ -458,9 +478,7 @@ module.exports = {
         }
         if (drawnCardIndex !== undefined) {
           const drawnCard = getCard(drawnCardIndex);
-
-          if (initialDrawnCardIndex !== undefined || isPlayable(drawnCard, topCard, drawRequirement)) {
-            if (!drawnCard) drawnCard = getCard(drawnCardIndex);
+          if (initialDrawnCardIndex !== undefined || isPlayable(channelId, drawnCard)) {
             game_states.set(channelId, drawnCardIndex, 'drawn_card')
             return await interaction.reply({
               content: `You drew a **${getName(drawnCard)}**.`,
