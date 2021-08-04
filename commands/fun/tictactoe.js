@@ -68,8 +68,7 @@ module.exports = {
     if (!interaction.isButton()) return;
 
     const custom_id = interaction.customId
-    const [ , coords, challengerId, opponentId ] = custom_id.split('-') // split up the custom id to get the individual pieces of data
-    const [ x, y ] = coords
+    const [ , , challengerId, opponentId ] = custom_id.split('-') // split up the custom id to get the individual pieces of data
 
     let challenger_plays = 0, opponent_plays = 0;
 
