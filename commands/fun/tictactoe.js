@@ -9,7 +9,7 @@ function getRandomInt(min, max) {
 module.exports = {
 	name: 'tictactoe',
 	description: 'Challenge someone to tic tac toe',
-	cooldown: 60,
+	cooldown: 30,
   options: [
     {
       name: 'opponent',
@@ -169,7 +169,7 @@ module.exports = {
     let content = ""
 
     if (winner === undefined) {
-      content = `<@${challengerId}> (X) is challenging <@${opponentId}> (O). <@${challenger_turn ? opponentId : challengerId}> will play next.`
+      content = `<@${challengerId}> (X) is challenging <@${opponentId}> (O). <@${challenger_turn ? challengerId : opponentId}> will play next.`
     } else {
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {

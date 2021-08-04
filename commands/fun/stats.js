@@ -24,7 +24,7 @@ module.exports = {
 	async execute(interaction) {
     const user = interaction.options.getUser('user');
     const game = interaction.options.getString('game');
-    const stats = client.user_data.get(user.id, `stats.${gameName}`)
+    const stats = client.user_data.get(user.id, `stats.${game}`)
 		await interaction.reply({content: `Stats for <@${user.id}> in ${gameNames[game]}:\nGames played: ${stats.played}\nWins: ${stats.wins}`, allowedMentions: {parse: []}});
 	},
 };
