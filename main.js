@@ -10,9 +10,9 @@ client.command_data = new Enmap({
   fetchAll: true,
   autoFetch: true,
   cloneLevel: 'deep',
-	autoEnsure: false,
 	autoEnsure: {ids: {}}
 });
+// enmap to store user data
 client.user_data = new Enmap({
 	name: 'user_data',
 	fetchAll: false,
