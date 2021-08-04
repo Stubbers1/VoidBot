@@ -1,6 +1,6 @@
 module.exports = {
-	name: 'prevent_archive',
-	description: 'Prevent a thread from being auto-archived',
+	name: 'prevent',
+	description: "Prevent a thread from being auto-archived",
 	cooldown: 30,
 	guild_only: true,
 	permissions: {
@@ -9,10 +9,17 @@ module.exports = {
   },
 	options: [
 		{
-			name: 'thread',
-			type: 'CHANNEL',
-			description: "The thread in which to prevent auto-archiving",
-			required: true
+			name: 'archive',
+			type: 'SUB_COMMAND',
+			description:"Prevent a thread from being auto-archived",
+			options: [
+				{
+					name: 'thread',
+					type: 'CHANNEL',
+					description: "The thread in which to prevent auto-archiving",
+					required: true
+				}
+			]
 		}
 	],
 	async execute(interaction) {
