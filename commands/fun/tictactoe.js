@@ -125,7 +125,7 @@ module.exports = {
                 button.label = 'O';
                 button.style = 'DANGER';
                 button.disabled = true;
-                botPlayCoords = button.custom_id.split('-')[0]
+                botPlayCoords = button.custom_id.split('-')[1]
                 break outerLoop;
               }
             }
