@@ -64,7 +64,7 @@ module.exports = {
     if (!interaction.isButton()) return;
     
     const custom_id = interaction.customId
-    const [ game, choiceString, challengerId, opponentId ] = custom_id.split('-')
+    const [ , choiceString, challengerId, opponentId ] = custom_id.split('-')
     const choice = parseInt(choiceString)
 
     if (interaction.user.id !== challengerId && interaction.user.id !== opponentId) return await interaction.reply({content: "You're not part of this game!", ephemeral: true})
