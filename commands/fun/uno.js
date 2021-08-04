@@ -155,43 +155,40 @@ module.exports = {
     const channelId = interaction.channelId;
     if (!game_states.has(channelId)) return await interaction.reply({content: "There isn't an Uno game here.", ephemeral: true});
 
-    let players, numPlayers, dealtCards, hand, topCardIndex, wildColour, newDrawRequirement, topCard, turn, playerIndex, components, chosenCardIndexString, chosenCardIndex, chosenCard, isTurn, chosenColour
-    let actionType = custom_id.split('-')[1]
-    let content = ""
+    const actionType = custom_id.split('-')[1]
     switch (actionType) {
-      case 'join': // someone joins the game
+      case 'join': { // someone joins the game
         if (game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're already in this game!", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
-        await interaction.defer()
+
+        const players = game_states.get(channelId, 'players')
+        const numPlayers = players.length
+
+        if (numPlayers >= 10) return await interaction.reply({content: "There are already 10 players in this game.", ephemeral: true})
+
         game_states.push(channelId, interaction.user.id, 'players')
 
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
-
-        return await interaction.editReply({content: `<@${interaction.user.id}> joined the game!`, allowedMentions: {parse: []}});
+        return await interaction.reply({content: `<@${interaction.user.id}> joined the game!`, allowedMentions: {parse: []}});
+      }
       case 'leave': // someone leaves the game
         if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
         
-        await interaction.defer()
         game_states.remove(channelId, interaction.user.id, 'players')
 
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
-
-        return await interaction.editReply({content: `<@${interaction.user.id}> left the game.`, allowedMentions: {parse: []}});
+        return await interaction.reply({content: `<@${interaction.user.id}> left the game.`, allowedMentions: {parse: []}});
       case 'start': // starting the game
         if (game_states.get(channelId, 'owner') !== interaction.user.id && !interaction.member.permissionsIn(interaction.channel).has('MANAGE_CHANNELS')) return await interaction.reply({content: "Only the user who created the game can start it.", ephemeral: true});
         if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true});
         
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
+        const players = game_states.observe(channelId, 'players')
+        const numPlayers = players.length
         if (2 > numPlayers || numPlayers > 10) return await interaction.reply({content: "An Uno game must have 2-10 players to start.", ephemeral: true});
         game_states.set(channelId, 0, 'turn')
         game_states.set(channelId, false, 'reversed')
 
-        topCardIndex = getRandomInt(0, 4) * 25 + getRandomInt(0, 19);
-        topCard = getCard(topCardIndex)
+        const topCardIndex = getRandomInt(0, 4) * 25 + getRandomInt(0, 19);
+        const topCard = getCard(topCardIndex)
         game_states.set(channelId, [topCardIndex], 'discard')
 
         game_states.set(channelId, Array.from(Array(108).keys()).filter(card => card !== topCardIndex), 'deck');
@@ -202,7 +199,6 @@ module.exports = {
           dealCards(channelId, playerId, 7)
         }
 
-        players = game_states.observe(channelId, 'players')
         shuffle(players)
 
         await interaction.reply({
@@ -222,149 +218,146 @@ module.exports = {
         
         game_states.delete(channelId)
         return await interaction.reply(`The game was cancelled by <@${interaction.user.id}>.`)
-      case 'hand': // show a player's hand
-        if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
-        if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
-       
-        turn = game_states.get(channelId, 'turn');
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
-        playerIndex = game_states.get(channelId, 'players').indexOf(interaction.user.id);
-        hand = game_states.get(channelId, `hands.${interaction.user.id}`);
-        topCardIndex = game_states.get(channelId, 'discard.0');
-        wildColour = game_states.get(channelId, 'wild_colour')
-        topCard = getCard(topCardIndex, wildColour)
+    }
+    if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
+    if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
+    const turn = game_states.get(channelId, 'turn');
+    const players = game_states.get(channelId, 'players')
+    const numPlayers = players.length
+    const playerIndex = game_states.get(channelId, 'players').indexOf(interaction.user.id);
+    const isTurn = mod(turn, numPlayers) === playerIndex
+    if (actionType === 'hand') {
+      const hand = game_states.get(channelId, `hands.${interaction.user.id}`);
+      const topCardIndex = game_states.get(channelId, 'discard.0');
+      const wildColour = game_states.get(channelId, 'wild_colour')
+      const topCard = getCard(topCardIndex, wildColour)
 
-        content = `The current card is a **${getName(topCard)}**.\n`
-        components = []
-        isTurn = mod(turn, numPlayers) === playerIndex
-        if (isTurn) {
-          drawRequirement = game_states.get(channelId, 'draw_requirement');
-          if (topCard[1] === "+4" && drawRequirement === 4) {
-            content += "You must draw 4 cards."
-            return await interaction.reply({
-              content: content,
-              components: [
-                {
-                  type: 'ACTION_ROW',
-                  components: [
-                    {
-                      type: 'BUTTON',
-                      style: 'PRIMARY',
-                      label: "Draw 4",
-                      custom_id: `uno-draw4`
-                    }
-                  ]
-                }
-              ],
-              ephemeral: true
-            })
-          }
-          if (drawRequirement) {
-            content += `You must draw ${drawRequirement} if you cannot stack another +2.`
-            components.push({
-              type: 'ACTION_ROW',
-              components: [
-                {
-                  type: 'BUTTON',
-                  label: `Draw ${drawRequirement}`,
-                  style: 'PRIMARY',
-                  custom_id: `uno-draw${drawRequirement}`
-                }
-              ]
-            })
-          }
-        }
-
-        row = components.length;
-        column = 0;
-        let allDisabled = true;
-        drawnCardIndex = game_states.get(channelId, 'drawn_card');
-        for (let i = 0; i < hand.length; i++) {
-          const cardIndex = hand[i];
-          const card = getCard(cardIndex);
-          if (column === 0) components.push({
-            type: 'ACTION_ROW',
-            components: []
-          })
-          const disabled = !isTurn || !isPlayable(card, topCard, drawRequirement);
-          allDisabled = allDisabled && disabled
-          components[row].components.push({
-            type: 'BUTTON',
-            label: getName(card),
-            style: "SECONDARY",
-            disabled: disabled,
-            custom_id: `uno-play${(drawnCardIndex !== undefined) ? 'drawn' : ''}-${cardIndex}`
-          })
-          column++;
-          if (column > 4) {
-            column = 0;
-            row++;
-          }
-        }
-
-        if (drawnCardIndex !== undefined) {
-          components.unshift({
-            type: 'ACTION_ROW',
+      content = `The current card is a **${getName(topCard)}**.\n`
+      components = []
+      if (isTurn) {
+        drawRequirement = game_states.get(channelId, 'draw_requirement');
+        if (topCard[1] === "+4" && drawRequirement === 4) {
+          content += "You must draw 4 cards."
+          return await interaction.reply({
+            content: content,
             components: [
               {
-                type: 'BUTTON',
-                label: 'End Turn',
-                style: 'DANGER',
-                custom_id: 'uno-end'
+                type: 'ACTION_ROW',
+                components: [
+                  {
+                    type: 'BUTTON',
+                    style: 'PRIMARY',
+                    label: "Draw 4",
+                    custom_id: `uno-draw4`
+                  }
+                ]
               }
-            ]
+            ],
+            ephemeral: true
           })
         }
-
-        if (isTurn && !drawRequirement && allDisabled) {
-          components.unshift({
+        if (drawRequirement) {
+          content += `You must draw ${drawRequirement} if you cannot stack another +2.`
+          components.push({
             type: 'ACTION_ROW',
             components: [
               {
                 type: 'BUTTON',
-                label: 'Draw',
+                label: `Draw ${drawRequirement}`,
                 style: 'PRIMARY',
-                custom_id: 'uno-draw'
+                custom_id: `uno-draw${drawRequirement}`
               }
             ]
           })
         }
-        
-        await interaction.reply({
-          content: content,
-          components: components.slice(0, 5),
-          ephemeral: true
+      }
+
+      row = components.length;
+      column = 0;
+      let allDisabled = true;
+      drawnCardIndex = game_states.get(channelId, 'drawn_card');
+      for (let i = 0; i < hand.length; i++) {
+        const cardIndex = hand[i];
+        const card = getCard(cardIndex);
+        if (column === 0) components.push({
+          type: 'ACTION_ROW',
+          components: []
         })
-        if (components.length > 5) {
-          for (let i = 5; i < components.length; i += 5) {
-            await interaction.followUp({
-              components: components.slice(i, i + 5),
-              ephemeral: true
-            })
-          }
+        const disabled = !isTurn || !isPlayable(card, topCard, drawRequirement);
+        allDisabled = allDisabled && disabled
+        components[row].components.push({
+          type: 'BUTTON',
+          label: getName(card),
+          style: "SECONDARY",
+          disabled: disabled,
+          custom_id: `uno-play${(drawnCardIndex !== undefined) ? 'drawn' : ''}-${cardIndex}`
+        })
+        column++;
+        if (column > 4) {
+          column = 0;
+          row++;
         }
-        return;
-      case 'play': // someone plays a card
-        if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
-        if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
-        turn = game_states.get(channelId, 'turn');
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
-        playerIndex = game_states.get(channelId, 'players').indexOf(interaction.user.id);
-        if (mod(turn, numPlayers) !== playerIndex) return await interaction.reply({content: "It isn't your turn!", ephemeral: true});
+      }
 
-        [ game, actionType, chosenCardIndexString, chosenColour ] = custom_id.split('-')
+      if (drawnCardIndex !== undefined) {
+        components.unshift({
+          type: 'ACTION_ROW',
+          components: [
+            {
+              type: 'BUTTON',
+              label: 'End Turn',
+              style: 'DANGER',
+              custom_id: 'uno-end'
+            }
+          ]
+        })
+      }
 
-        chosenCardIndex = parseInt(chosenCardIndexString)
+      if (isTurn && !drawRequirement && allDisabled) {
+        components.unshift({
+          type: 'ACTION_ROW',
+          components: [
+            {
+              type: 'BUTTON',
+              label: 'Draw',
+              style: 'PRIMARY',
+              custom_id: 'uno-draw'
+            }
+          ]
+        })
+      }
+      
+      await interaction.reply({
+        content: content,
+        components: components.slice(0, 5),
+        ephemeral: true
+      })
+      if (components.length > 5) {
+        for (let i = 5; i < components.length; i += 5) {
+          await interaction.followUp({
+            components: components.slice(i, i + 5),
+            ephemeral: true
+          })
+        }
+      }
+    }
+    // the following actions (play, draw) must occur on the player's turn
+    if (!isTurn) return await interaction.reply({content: "It isn't your turn!", ephemeral: true});
+    let content = ""
+    let hand, drawnCardIndex;
+    switch (actionType) {
+      case 'play': { // someone plays a card
+        const [ , , chosenCardIndexString, chosenColour ] = custom_id.split('-')
+
+        const chosenCardIndex = parseInt(chosenCardIndexString)
         if (!game_states.includes(channelId, chosenCardIndex, `hands.${interaction.user.id}`)) return await interaction.reply({content: "That card isn't in your hand anymore.", ephemeral: true});
         
-        chosenCard = getCard(chosenCardIndex, chosenColour);
+        const chosenCard = getCard(chosenCardIndex, chosenColour);
 
-        topCardIndex = game_states.get(channelId, 'discard.0');
-        wildColour = game_states.get(channelId, 'wild_colour') ?? null;
-        topCard = getCard(topCardIndex, wildColour);
-        drawRequirement = game_states.get(channelId, 'draw_requirement');
+        const topCardIndex = game_states.get(channelId, 'discard.0');
+        const wildColour = game_states.get(channelId, 'wild_colour') ?? null;
+        const topCard = getCard(topCardIndex, wildColour);
+        const drawRequirement = game_states.get(channelId, 'draw_requirement');
         if (!isPlayable(chosenCard, topCard, drawRequirement)) return await interaction.reply({content: "You can't play that card!", ephemeral: true});
 
         if (chosenCard[0] === "wild" && !chosenColour) return await interaction.reply({
@@ -382,6 +375,7 @@ module.exports = {
           ],
           ephemeral: true
         })
+        
         drawnCardIndex = game_states.get(channelId, 'drawn_card');
         if (drawnCardIndex !== undefined) {
           content += `<@${interaction.user.id}> played a **${getName(chosenCard)}** after drawing it.`;
@@ -433,28 +427,23 @@ module.exports = {
           content += "."
         }
         break;
+      }
       default: // someone draws a card
         if (!actionType.startsWith('draw')) return await interaction.reply({content: "That button isn't what I expected.", ephemeral: true}); // if someone presses an old button it could have a different custom id - ignore it
-        if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
-        if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
-        
-        turn = game_states.get(channelId, 'turn');
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
-        playerIndex = game_states.get(channelId, 'players').indexOf(interaction.user.id);
-        if (mod(turn, numPlayers) !== playerIndex) return await interaction.reply({content: "It isn't your turn!", ephemeral: true});
 
         [ game, actionType, chosenCardIndexString ] = custom_id.split('-')
         hand = game_states.get(channelId, `hands.${interaction.user.id}`)
-        topCardIndex = game_states.get(channelId, 'discard.0');
-        wildColour = game_states.get(channelId, 'wild_colour') ?? null;
-        topCard = getCard(topCardIndex, wildColour);
-        drawRequirement = game_states.get(channelId, 'draw_requirement');
-        if (actionType !== 'draw') {
+        const topCardIndex = game_states.get(channelId, 'discard.0');
+        const wildColour = game_states.get(channelId, 'wild_colour') ?? null;
+        const topCard = getCard(topCardIndex, wildColour);
+        const drawRequirement = game_states.get(channelId, 'draw_requirement');
+
+        if (actionType !== 'draw') { // draw 2+ cards (due to +2 or +4 cards)
           if (!drawRequirement) return await interaction.reply({content: "There's no need to draw at the moment!", ephemeral: true});
-          dealtCards = dealCards(channelId, interaction.user.id, drawRequirement);
+          if (actionType.slice(4) !== drawRequirement.toString()) return await interaction.reply({content: "That doesn't match the current draw requirement - press \"View Hand\" again.", ephemeral: true});
+          const dealtCards = dealCards(channelId, interaction.user.id, drawRequirement);
           content += `<@${interaction.user.id}> drew ${dealtCards.length} card${dealtCards.length === 1 ? '' : 's'}`;
-          if (dealtCards.length < drawRequirement) content += ` - there were not enough available to draw ${drawRequirement}`
+          if (dealtCards.length < drawRequirement) content += ` because there were not enough available to draw ${drawRequirement}`
           content += `. They now have **${hand.length}** cards.`
           game_states.delete(channelId, 'draw_requirement');
           await interaction.reply({content: `You drew: **${dealtCards.map(index => getName(getCard(index))).join("**, **")}**`, ephemeral: true});
@@ -468,7 +457,7 @@ module.exports = {
           drawnCardIndex = initialDrawnCardIndex
         }
         if (drawnCardIndex !== undefined) {
-          drawnCard = getCard(drawnCardIndex);
+          const drawnCard = getCard(drawnCardIndex);
 
           if (initialDrawnCardIndex !== undefined || isPlayable(drawnCard, topCard, drawRequirement)) {
             if (!drawnCard) drawnCard = getCard(drawnCardIndex);
@@ -501,15 +490,6 @@ module.exports = {
         }
       case 'end': // someone ends their turn after drawing a card
         if (actionType === 'end') {
-          if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true});
-          if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true});
-
-          turn = game_states.get(channelId, 'turn');
-          players = game_states.get(channelId, 'players')
-          numPlayers = players.length
-          playerIndex = game_states.get(channelId, 'players').indexOf(interaction.user.id);
-          if (mod(turn, numPlayers) !== playerIndex) return await interaction.reply({content: "It isn't your turn!", ephemeral: true});
-
           if (!game_states.has(channelId, 'drawn_card')) return await interaction.reply({content: "You can't end your turn at the moment!", ephemeral: true})
           drawnCardIndex = game_states.get(channelId, 'drawn_card')
           game_states.delete(channelId, 'drawn_card')
@@ -521,8 +501,6 @@ module.exports = {
         } else {
           content = `<@${interaction.user.id}> tried to draw a card, but there were none available.`
         }
-        players = game_states.get(channelId, 'players')
-        numPlayers = players.length
         break;
     }
     incrementTurn(channelId); // increment the turn count

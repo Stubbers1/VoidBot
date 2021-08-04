@@ -12,7 +12,7 @@ client.command_data = new Enmap({
   cloneLevel: 'deep',
 	autoEnsure: {ids: {}}
 });
-// enmap to store user data
+// enmap to store user data (at the moment, game stats)
 client.user_data = new Enmap({
 	name: 'user_data',
 	fetchAll: false,
