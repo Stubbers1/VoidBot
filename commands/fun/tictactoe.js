@@ -9,7 +9,7 @@ function getRandomInt(min, max) {
 module.exports = {
 	name: 'tictactoe',
 	description: 'Challenge someone to tic tac toe',
-	cooldown: 120,
+	cooldown: 60,
   options: [
     {
       name: 'opponent',
@@ -178,10 +178,15 @@ module.exports = {
           components[i].components[j].disabled = true;
         }
       }
+      client.user_data.ensure(challengerId)
+      client.user_data.ensure(opponentId)
+      client.user_data.inc(challengerId, 'stats.tictactoe.played')
+      client.user_data.inc(opponentId, 'stats.tictactoe.played')
       content = `<@${challengerId}> (X) challenged <@${opponentId}> (O) - `
       if (winner === null) {
         content += `the result was a draw.`
       } else {
+        client.user_data.inc(winner, 'stats.tictactoe.wins')
         content += `<@${winner}> won!`
       }
     }

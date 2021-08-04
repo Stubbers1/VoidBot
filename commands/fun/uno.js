@@ -37,7 +37,7 @@ function getCard(index, wildColour) {
 function getName(card) {
   let name = card.slice(0, 2).join(" ")
   if (card.length > 2) {
-    name += "(" + card.slice(2).join(" ") + ")"
+    name += " (" + card.slice(2).join(" ") + ")"
   }
   return name
 }
@@ -121,8 +121,9 @@ function endGame(channelId) {
 
   for (let i = 0; i < players.length; i++) {
     const playerId = players[i]
-    client.user_data.inc(playerId, 'uno.played')
-    if (game_states.get(channelId, `hands.${playerId}`).length === 0) client.user_data.inc(playerId, 'uno.wins');
+    client.user_data.ensure(playerId)
+    client.user_data.inc(playerId, 'stats.uno.played')
+    if (game_states.get(channelId, `hands.${playerId}`).length === 0) client.user_data.inc(playerId, 'stats.uno.wins');
   }
 
   game_states.delete(channelId)
