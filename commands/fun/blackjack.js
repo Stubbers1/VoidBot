@@ -63,7 +63,7 @@ module.exports = {
 
     await interaction.deferUpdate()
     
-    const hand = handString.split(',').map(card => parseInt(card))
+    const hand = handString.split(',').map(card => parseInt(card, 10))
     const deck = Array.from(Array(52).keys()).filter(card => !hand.includes(card))
 
     if (action === "hit") hand.push(deck.splice(getRandomInt(0, deck.length), 1)[0]);

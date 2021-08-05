@@ -65,7 +65,7 @@ module.exports = {
     
     const custom_id = interaction.customId
     const [ , choiceString, challengerId, opponentId ] = custom_id.split('-')
-    const choice = parseInt(choiceString)
+    const choice = parseInt(choiceString, 10)
 
     if (interaction.user.id !== challengerId && interaction.user.id !== opponentId) return await interaction.reply({content: "You're not part of this game!", ephemeral: true})
     

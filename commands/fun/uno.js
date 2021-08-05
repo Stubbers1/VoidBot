@@ -376,7 +376,7 @@ module.exports = {
       case 'play': { // someone plays a card
         const [ , , chosenCardIndexString, chosenColour ] = custom_id.split('-')
 
-        const chosenCardIndex = parseInt(chosenCardIndexString)
+        const chosenCardIndex = parseInt(chosenCardIndexString, 10)
         if (!game_states.includes(channelId, chosenCardIndex, `hands.${interaction.user.id}`)) return await interaction.reply({content: "That card isn't in your hand anymore.", ephemeral: true});
         
         const chosenCard = getCard(chosenCardIndex, chosenColour);
@@ -444,7 +444,7 @@ module.exports = {
         }
 
         if (chosenCard[1].startsWith("+")) {
-          plusNumber = parseInt(chosenCard[1][1])
+          plusNumber = parseInt(chosenCard[1][1], 10)
           newDrawRequirement = (drawRequirement ?? 0) + plusNumber
           game_states.set(channelId, newDrawRequirement, 'draw_requirement');
           content += `\nThe next player must draw ${newDrawRequirement} cards`
