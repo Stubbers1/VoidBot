@@ -168,7 +168,7 @@ const view_hand_button = {
 module.exports = [
   {
     name: 'game uno',
-    description: 'Creates an Uno game',
+    description: 'Create an Uno game',
     cooldown: 10,
     guild_only: true,
     async execute(interaction) {
