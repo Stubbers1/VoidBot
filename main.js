@@ -64,16 +64,20 @@ getRandomInt = function(min, max) {
 }
 
 // load all the commands found in the commands folder
-function addGuilds(commandModule, guilds) {
-	if (module.guilds) {
-		commandModule.guilds = commandModule.guilds ?? []
-		commandModule.guilds.push(...guilds);
+function addGuilds(commandModule, guilds, ...parentModules) {
+	commandModule.guilds = commandModule.guilds ?? []
+	for (const guildId of guilds) {
+		if (!commandModule.guilds.includes(guildId)) commandModule.guilds.push(guildId)
+		for (const parentModule of parentModules) {
+			if (parentModule.guilds && !parentModule.guilds.includes(guildId)) parentModule.guilds.push(guildId);
+		}
 	}
 }
 
-function mergeModules(commandModule, module, split) {
+function mergeModules(commandModule, module, split, ...parentModules) {
 	if (split.length === 1) {
 		if (module.description) commandModule.description = module.description;
+		if (module.cooldown) commandModule.cooldown = module.cooldown;
 		if (module.options) {
 			commandModule.options = commandModule.options ?? []
 			commandModule.options.push(...module.options)
@@ -84,14 +88,15 @@ function mergeModules(commandModule, module, split) {
 			if (module.execute) executors.push(module.execute)
 			commandModule.executors.push(...executors)
 		}
-		if (module.guilds) addGuilds(commandModule, module.guilds)
+		if (module.guilds) addGuilds(commandModule, module.guilds, ...parentModules)
 	} else {
 		split.shift()
+		parentModules.unshift(commandModule)
 		commandModule.subCommands = commandModule.subCommands ?? {}
 		const subCommandName = split[0]
 		commandModule.subCommands[subCommandName] = commandModule.subCommands[subCommandName] ?? {name: subCommandName}
 		const subCommandModule = commandModule.subCommands[subCommandName]
-		mergeModules(subCommandModule, module, split)
+		mergeModules(subCommandModule, module, split, ...parentModules)
 	}
 }
 
@@ -107,7 +112,6 @@ function searchModule(module) {
 		const commandName = split[0];
 		if (!client.commands.has(commandName)) client.commands.set(commandName, {name: commandName, description: module.description})
 		const commandModule = client.commands.get(commandName)
-		if (module.guilds) addGuilds(commandModule, module.guilds)
 		mergeModules(commandModule, module, split)
 	}
 }
@@ -388,45 +392,56 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 	}
 
 	if (commandModule.threadOnly && !interaction.channel.isThread()) return await interaction.reply({content: "This command can only be used in a thread.", ephemeral: true})
-
-	// handle command cooldowns
-	const { cooldowns } = client;
-
-	if (!cooldowns.has(commandModule.name)) {
-		cooldowns.set(commandModule.name, new Collection());
+	
+	try {
+		const result = await executeCommand(commandModule, interaction, commandName);
+		if (result) processCooldown(commandModule, commandName, interaction.user.id);
+	} catch (error) {
+		console.error(error);
+		if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
+			if (!interaction.deferred) return await interaction.followUp('There was an error trying to execute that command!');
+			return await interaction.editReply('There was an error trying to execute that command!');
+		} else {
+			return await interaction.reply({content: 'There was an error trying to execute that command!', ephemeral: true});
+		}
 	}
+});
+
+function processCooldown(commandModule, commandName, userId) {
+	if (!commandModule.cooldown) return;
 
 	const now = Date.now();
-	const timestamps = cooldowns.get(commandModule.name);
-	const cooldownAmount = (commandModule.cooldown ?? 3) * 1000;
+	const timestamps = client.cooldowns.get(commandName);
+	const cooldownAmount = commandModule.cooldown * 1000;
 
-	if (timestamps.has(interaction.user.id)) {
-		const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
+	timestamps.set(userId, now);
+	setTimeout(() => timestamps.delete(userId), cooldownAmount);
+}
 
-		if (now < expirationTime) {
-			const timeLeft = (expirationTime - now) / 1000;
-			return interaction.reply({content: `Please wait ${timeLeft.toFixed(1)} more second(s) before reusing \`/${commandName}\``, ephemeral: true});
+async function executeCommand(commandModule, interaction, commandName, group = true) {
+	if (!interaction.guildId && (commandModule.guild_only || commandModule.guilds)) return await interaction.reply({content: `\`/${commandName}\` must be executed in a server.`, ephemeral: true}) && false;
+	if (commandModule.guilds && !commandModule.guilds.includes(interaction.guildId)) return await interaction.reply({content: `\`/${commandName}\` cannot be executed in this server.`, ephemeral: true}) && false;
+	if (commandModule.cooldown) {
+		if (!client.cooldowns.has(commandName)) {
+			client.cooldowns.set(commandName, new Collection())
+		}
+		const timestamps = client.cooldowns.get(commandName);
+		if (timestamps.has(interaction.user.id)) {
+			const cooldownAmount = commandModule.cooldown * 1000;
+			const now = Date.now();
+			const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
+
+			if (now < expirationTime) {
+				const timeLeft = (expirationTime - now) / 1000;
+				return await interaction.reply({content: `Please wait ${timeLeft.toFixed(1)} more second(s) before reusing \`/${commandName}\``, ephemeral: true}) && false;
+			}
 		}
 	}
 
-	await executeCommand(commandModule, interaction);
-});
-
-async function executeCommand(commandModule, interaction, group = true) {
 	if (commandModule.executors) {
 		for (const executor of commandModule.executors) {
-			try {
-				const result = await executor(interaction);
-				if (result) return result;
-			} catch (error) {
-				console.error(error);
-				if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
-					await interaction.editReply('There was an error trying to execute that command!');
-				} else {
-					await interaction.reply({content: 'There was an error trying to execute that command!', ephemeral: true});
-				}
-				return;
-			}
+			const result = await executor(interaction);
+			if (result) return result;
 		}
 	}
 
@@ -436,10 +451,15 @@ async function executeCommand(commandModule, interaction, group = true) {
 	if (!subCommandName) subCommandName = interaction.options.getSubCommand(false);
 	if (!subCommandName) return;
 
+	commandName += ' ' + subCommandName;
+
 	const subCommandModule = commandModule.subCommands[subCommandName]
 	if (!subCommandModule) return;
-	const result = await executeCommand(subCommandModule, interaction, false);
-	if (result) return result;
+	const result = await executeCommand(subCommandModule, interaction, commandName, false);
+	if (result) {
+		processCooldown(subCommandModule, commandName, interaction.user.id);
+		return result;
+	}
 }
 
 const publicIp = require('public-ip');

@@ -34,9 +34,8 @@ module.exports = {
 		}
 		client.scheduled_settings.set('unarchive_threads', threadIds)
 		if (threadIds.includes(thread.id)) {
-			await interaction.editReply(`Now preventing auto-archive in <#${thread.id}>!`)
-		} else {
-			await interaction.editReply(`No longer preventing auto-archive in <#${thread.id}>.`)
+			return await interaction.editReply(`Now preventing auto-archive in <#${thread.id}>!`) || true;
 		}
+		return await interaction.editReply(`No longer preventing auto-archive in <#${thread.id}>.`) || true;
 	}
 };

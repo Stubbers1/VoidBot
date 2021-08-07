@@ -50,10 +50,10 @@ module.exports = [
           ]
         }
       ]
-      await interaction.reply({
+      return await interaction.reply({
         content: content,
         components: (value === 21) ? [] : components
-      });
+      }) || true;
     }
   },
   async (interaction) => {
@@ -64,7 +64,7 @@ module.exports = [
     const split = custom_id.split('-');
     if (split.length !== 4) return;
     const [ , action, playerId, handString ] = split;
-    if (interaction.user.id !== playerId) return await interaction.reply({content: "You didn't start this game!", ephemeral: true});
+    if (interaction.user.id !== playerId) return await interaction.reply({content: "You didn't start this game!", ephemeral: true}) || true;
 
     await interaction.deferUpdate();
     
@@ -86,9 +86,9 @@ module.exports = [
     }
 
     const components = (value >= 21 || action === "stick") ? [] : interaction.message.components.map(component => component.toJSON());
-    if (components.length > 0) components[0].components[0].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;
-    if (components.length > 0) components[0].components[1].custom_id = `blackjack-hit-${playerId}-${hand.join(',')}`;
+    if (components.length > 0) components[0].components[0].custom_id = `blackjack-hit-${playerId}-${hand.join(',')}`;
+    if (components.length > 0) components[0].components[1].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;
     
-    await interaction.message.edit({content: content, components: components})
+    return await interaction.message.edit({content: content, components: components}) || true;
   }
 ];

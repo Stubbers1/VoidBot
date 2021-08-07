@@ -30,6 +30,6 @@ module.exports = {
     if (!member.kickable) return await interaction.editReply(`I cannot kick that member.`);
     const reason = interaction.options.getString('reason')
     await member.kick(`${interaction.user.tag}: ${reason ?? 'No reason given'}`)
-		await interaction.editReply(`Kicked <@${user.id}>`);
+		return await interaction.editReply(`Kicked <@${user.id}>`) || true;
 	}
 };

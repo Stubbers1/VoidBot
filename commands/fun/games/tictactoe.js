@@ -64,6 +64,7 @@ module.exports = [
         components: components,
         allowedMentions: {users: [(opponent.id === client.user.id) ? challenger.id : opponent.id]}
       });
+      return true;
     }
   },
   async (interaction) => {
@@ -89,12 +90,12 @@ module.exports = [
       }
     }
 
-    if (finished || opponent_plays === 5) return await interaction.reply({content: "This game is over!", ephemeral: true})
+    if (finished || opponent_plays === 5) return await interaction.reply({content: "This game is over!", ephemeral: true}) || true;
 
     let challenger_turn = challenger_plays < opponent_plays;
-    if ((challenger_turn ? challengerId : opponentId) !== interaction.user.id) return await interaction.reply({content: "It isn't your turn!", ephemeral: true})
+    if ((challenger_turn ? challengerId : opponentId) !== interaction.user.id) return await interaction.reply({content: "It isn't your turn!", ephemeral: true}) || true;
 
-    if (buttonPressed.label !== '-') return await interaction.reply({content: "You must play in an empty space!", ephemeral: true})
+    if (buttonPressed.label !== '-') return await interaction.reply({content: "You must play in an empty space!", ephemeral: true}) || true;
 
     await interaction.deferUpdate(); // let discord know we're gonna edit the message... soon
 

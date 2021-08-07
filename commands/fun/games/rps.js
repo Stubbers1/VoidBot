@@ -60,6 +60,7 @@ module.exports = [
         ]
       });
       game_states.set(interaction.id, [null, opponent.id === client.user.id ? getRandomInt(0, 3) : null])
+      return true;
     }
   },
   async (interaction) => {
@@ -72,16 +73,16 @@ module.exports = [
     const [ , choiceString, challengerId, opponentId ] = split;
     const choice = parseInt(choiceString, 10)
 
-    if (interaction.user.id !== challengerId && interaction.user.id !== opponentId) return await interaction.reply({content: "You're not part of this game!", ephemeral: true})
+    if (interaction.user.id !== challengerId && interaction.user.id !== opponentId) return await interaction.reply({content: "You're not part of this game!", ephemeral: true}) || true;
     
-    if (!game_states.has(interaction.message.interaction.id)) return await interaction.update({components: []})
+    if (!game_states.has(interaction.message.interaction.id)) return await interaction.update({components: []}) || true;
     const index = (interaction.user.id === opponentId) ? 1 : 0
     const currentChoice = game_states.get(interaction.message.interaction.id, index)
-    if (currentChoice !== null) return await interaction.reply({content: "You've already played!", ephemeral: true});
+    if (currentChoice !== null) return await interaction.reply({content: "You've already played!", ephemeral: true}) || true;
 
     game_states.set(interaction.message.interaction.id, choice, index)
     const oppositionChoice = game_states.get(interaction.message.interaction.id, index ? 0 : 1)
-    if (oppositionChoice === null) return await interaction.reply({content: `You chose ${choicesMap[choice]}.`, ephemeral: true})
+    if (oppositionChoice === null) return await interaction.reply({content: `You chose ${choicesMap[choice]}.`, ephemeral: true}) || true;
 
     const [ challengerChoice, opponentChoice ] = game_states.get(interaction.message.interaction.id)
     game_states.delete(interaction.message.interaction.id)
@@ -100,6 +101,6 @@ module.exports = [
       client.user_data.inc(opponentId, 'stats.rps.wins')
       content += `<@${opponentId}> wins!`
     }
-    await interaction.update({content: content, allowedMentions: {parse: []}, components: []})
+    return await interaction.update({content: content, allowedMentions: {parse: []}, components: []}) || true;
   }
 ];
