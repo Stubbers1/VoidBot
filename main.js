@@ -2,6 +2,7 @@ require('dotenv').config({ path: ".env" })
 const fs = require('fs');
 const { Client, Intents, Collection, Message } = require('discord.js');
 const Enmap = require('enmap');
+const path = require('path')
 
 client = new Client({intents: [Intents.FLAGS.GUILDS]});
 client.commands = new Collection();
@@ -62,20 +63,26 @@ getRandomInt = function(min, max) {
 }
 
 // load all the commands found in the commands folder
-function mergeModules(commandModule, module) {
-	
-}
-
-function checkMergeModules(commandModule, module, split) {
+function mergeModules(commandModule, module, split) {
 	if (split.length === 1) {
-		mergeModules(commandModule, module)
+		if (module.description) commandModule.description = module.description;
+		if (module.options) {
+			commandModule.options = commandModule.options ?? []
+			commandModule.options.push(...module.options)
+		}
+		if (module.executors ?? module.execute) {
+			commandModule.executors = commandModule.executors ?? []
+			const executors = module.executors ?? []
+			if (module.execute) executors.push(module.execute)
+			commandModule.executors.push(...executors)
+		}
 	} else {
 		split.shift()
 		commandModule.subCommands = commandModule.subCommands ?? {}
 		const subCommandName = split[0]
-		commandModule.subCommands[subCommandName] = commandModule.subCommands[subCommandName] ?? {}
+		commandModule.subCommands[subCommandName] = commandModule.subCommands[subCommandName] ?? {name: subCommandName}
 		const subCommandModule = commandModule.subCommands[subCommandName]
-		checkMergeModules(subCommandModule, module, split)
+		mergeModules(subCommandModule, module, split)
 	}
 }
 
@@ -85,20 +92,21 @@ function searchModule(module) {
 			searchModule(subModule);
 		}
 	} else if ((typeof module) === 'function') {
-		self.handlers.push(module)
+		client.handlers.push(module)
 	} else if ((typeof module) === 'object' && (typeof module.name) === 'string') {
 		const split = module.name.split(' ')
 		const commandName = split[0];
 		if (!client.commands.has(commandName)) client.commands.set(commandName, {name: commandName})
 		const commandModule = client.commands.get(commandName)
-		checkMergeModules(commandModule, module, split)
+		mergeModules(commandModule, module, split)
 	}
 }
 
 function searchFolder(folderPath) {
-	const subPaths = fs.readdirSync(folderPath);
-	for (const subPath of subPaths) {
-		const pathStats = fs.statSync(subPath)
+	const childNames = fs.readdirSync(folderPath);
+	for (const childName of childNames) {
+		const subPath = path.resolve(folderPath, childName)
+		const stats = fs.statSync(subPath)
 		if (stats.isDirectory()) {
 			searchFolder(subPath);
 		} else if (stats.isFile() && subPath.endsWith('.js')) {
@@ -265,6 +273,26 @@ client.on('guildCreate', async guild => {
 	await updateGuildPermissions(guild.id) // update the command permissions for this new guild
 })
 
+function getSlashCommandData(commandModule, options = [], subCommand = false, group = true) {
+	const commandData = {
+		name: commandModule.name,
+		description: commandModule.description
+	}
+	if (subCommand) {
+		commandData.type = group ? 'SUB_COMMAND_GROUP' : 'SUB_COMMAND'
+	}
+	if (commandModule.options) options.push(...commandModule.options)
+	if (commandModule.subCommands) {
+		commandData.options = []
+		for (const [, subCommandModule] of Object.keys(commandModule.subCommands)) {
+			commandData.options.push(getSlashCommandData(subCommandModule, options, true, !subCommand));
+		}
+	} else {
+		commandData.options = options
+	}
+	return commandData
+}
+
 // update all slash commands on discord
 async function updateAllSlashCommands() {
 	// build arrays of global commands and guild commands
@@ -276,12 +304,7 @@ async function updateAllSlashCommands() {
 	}
 	for (const commandName of client.commands.keys()) { // for each of the commands in the collection
 		const commandModule = client.commands.get(commandName) // get the command
-		const requestData = { // data for this command, sent later to discord to update
-			name: commandName,
-			description: commandModule.description,
-			options: commandModule.options || undefined,
-			defaultPermission: !commandModule.guild_only // if the command is only for guilds, prevent access by default (in DMs)
-		}
+		const requestData = getSlashCommandData(commandModule);
 		if (commandModule.guilds) { // if this command is specific to certain guilds
 			for (let i = 0; i < commandModule.guilds.length; i++) { // only push it to the arrays for those guilds
 				const guildId = commandModule.guilds[i]
@@ -321,19 +344,18 @@ client.once('ready', async () => { // when the bot logs in
 client.on('interactionCreate', async interaction => { // when an interaction occurs (we're interested in slash command interactions)
 	if (!interaction.isCommand()) {
 		if (!interaction.isMessageComponent) return;
-		const custom_id = interaction.customId
-		const commandName = custom_id.split('-')[0]
-		if (!commandName) return;
-		const commandModule = client.commands.get(commandName);
-		if (!commandModule) return await interaction.reply({content: "I got lost while processing that. You should probably tell DarkVoid because he didn't expect this message to get shown.", ephemeral: true})
-		try {
-			await commandModule.executeComponent(interaction);
-		} catch (error) {
-			console.error(error);
-			if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
-				await interaction.editReply('An error occurred while handling your interaction.');
-			} else {
-				await interaction.reply({content: 'An error occurred while handling your interaction.', ephemeral: true});
+		for (const handler of client.handlers) {
+			try {
+				const result = await handler(interaction);
+				if (result) return result;
+			} catch (error) {
+				console.error(error);
+				if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
+					await interaction.editReply('An error occurred while handling your interaction.');
+				} else {
+					await interaction.reply({content: 'An error occurred while handling your interaction.', ephemeral: true});
+				}
+				return error;
 			}
 		}
 		return;
@@ -377,21 +399,38 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 		}
 	}
 
-	timestamps.set(interaction.user.id, now);
-	setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+	await executeCommand(commandModule, interaction);
+});
 
-	// execute the command, catch any errors
-	try {
-		await commandModule.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
-			await interaction.editReply('There was an error trying to execute that command!');
-		} else {
-			await interaction.reply({content: 'There was an error trying to execute that command!', ephemeral: true});
+async function executeCommand(commandModule, interaction) {
+	if (commandModule.executors) {
+		for (const executor of commandModule.executors) {
+			try {
+				const result = await executor(interaction);
+				if (result) {
+					timestamps.set(interaction.user.id, now);
+					setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+					return result;
+				}
+			} catch (error) {
+				console.error(error);
+				if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
+					await interaction.editReply('There was an error trying to execute that command!');
+				} else {
+					await interaction.reply({content: 'There was an error trying to execute that command!', ephemeral: true});
+				}
+				return error;
+			}
 		}
 	}
-});
+
+	if (commandModule.subCommands) {
+		for (const subCommandModule of Object.values(commandModule.subCommands)) {
+			const result = executeCommand(subCommandModule, interaction);
+			if (result) return result;
+		}
+	}
+}
 
 const publicIp = require('public-ip');
 const https = require('https');
