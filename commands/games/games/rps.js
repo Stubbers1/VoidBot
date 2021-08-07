@@ -11,7 +11,7 @@ const choicesMap = ['rock', 'paper', 'scissors']
 
 module.exports = [
   {
-    name: 'rps',
+    name: 'game rps',
     description: 'Challenge someone to rock paper scissors',
     cooldown: 60,
     options: [

@@ -14,7 +14,7 @@ function getName(card) {
 
 module.exports = [
   {
-    name: 'blackjack',
+    name: 'game blackjack',
     description: 'Start a game of blackjack',
     cooldown: 30,
     async execute(interaction) {

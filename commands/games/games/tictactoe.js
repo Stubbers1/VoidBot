@@ -6,65 +6,67 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min)) + min;
 }
 
-module.exports = {
-	name: 'tictactoe',
-	description: 'Challenge someone to tic tac toe',
-	cooldown: 30,
-  options: [
-    {
-      name: 'opponent',
-      type: 'USER',
-      description: "The user to challenge",
-      required: true
-    }
-  ],
-	async execute(interaction) {
-    const challenger = interaction.user
-    const opponent = interaction.options.getUser('opponent', true)
-    if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
-    let content = `<@${challenger.id}> (X) challenges <@${opponent.id}> (O) to a game of tic tac toe! <@${opponent.id}> will play first.`
-    const components = [
+module.exports = [
+  {
+    name: 'game tictactoe',
+    description: 'Challenge someone to tic tac toe',
+    cooldown: 30,
+    options: [
       {
-        type: 'ACTION_ROW',
-        components: [
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-00-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-01-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-02-${challenger.id}-${opponent.id}`},
-        ]
-      },
-      {
-        type: 'ACTION_ROW',
-        components: [
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-10-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-11-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-12-${challenger.id}-${opponent.id}`},
-        ]
-      },
-      {
-        type: 'ACTION_ROW',
-        components: [
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-20-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-21-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-22-${challenger.id}-${opponent.id}`},
-        ]
-      },
-    ]
-    // if the opponent is the bot, make a random move
-    if (opponent.id === client.user.id) {
-      const i = getRandomInt(0, 3)
-      const j = getRandomInt(0, 3)
+        name: 'opponent',
+        type: 'USER',
+        description: "The user to challenge",
+        required: true
+      }
+    ],
+    async execute(interaction) {
+      const challenger = interaction.user
+      const opponent = interaction.options.getUser('opponent', true)
+      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
+      let content = `<@${challenger.id}> (X) challenges <@${opponent.id}> (O) to a game of tic tac toe! <@${opponent.id}> will play first.`
+      const components = [
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-00-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-01-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-02-${challenger.id}-${opponent.id}`},
+          ]
+        },
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-10-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-11-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-12-${challenger.id}-${opponent.id}`},
+          ]
+        },
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-20-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-21-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-22-${challenger.id}-${opponent.id}`},
+          ]
+        },
+      ]
+      // if the opponent is the bot, make a random move
+      if (opponent.id === client.user.id) {
+        const i = getRandomInt(0, 3)
+        const j = getRandomInt(0, 3)
 
-      Object.assign(components[i].components[j], {label: 'O', style: 'DANGER', disabled: true})
+        Object.assign(components[i].components[j], {label: 'O', style: 'DANGER', disabled: true})
 
-      content = `<@${challenger.id}> (X) has challenged me (O) to a game of tic-tac-toe! I've made my first move.`
+        content = `<@${challenger.id}> (X) has challenged me (O) to a game of tic-tac-toe! I've made my first move.`
+      }
+      await interaction.reply({
+        content: content,
+        components: components,
+        allowedMentions: {users: [(opponent.id === client.user.id) ? challenger.id : opponent.id]}
+      });
     }
-    await interaction.reply({
-      content: content,
-      components: components,
-      allowedMentions: {users: [(opponent.id === client.user.id) ? challenger.id : opponent.id]}
-    });
-	},
-  async executeComponent(interaction) {
+  },
+  async (interaction) => {
     if (!interaction.isButton()) return;
 
     const custom_id = interaction.customId
@@ -195,4 +197,4 @@ module.exports = {
 
     await interaction.message.edit({content: content, components: components, allowedMentions: winner === undefined ? {users: [challenger_turn ? opponentId : challengerId]} : {parse: []}});
   }
-};
+];

@@ -2,7 +2,8 @@ require('dotenv').config({ path: ".env" })
 const fs = require('fs');
 const { Client, Intents, Collection, Message } = require('discord.js');
 const Enmap = require('enmap');
-const path = require('path')
+const path = require('path');
+const util = require('util')
 
 client = new Client({intents: [Intents.FLAGS.GUILDS]});
 client.commands = new Collection();
@@ -63,6 +64,13 @@ getRandomInt = function(min, max) {
 }
 
 // load all the commands found in the commands folder
+function addGuilds(commandModule, guilds) {
+	if (module.guilds) {
+		commandModule.guilds = commandModule.guilds ?? []
+		commandModule.guilds.push(...guilds);
+	}
+}
+
 function mergeModules(commandModule, module, split) {
 	if (split.length === 1) {
 		if (module.description) commandModule.description = module.description;
@@ -76,6 +84,7 @@ function mergeModules(commandModule, module, split) {
 			if (module.execute) executors.push(module.execute)
 			commandModule.executors.push(...executors)
 		}
+		if (module.guilds) addGuilds(commandModule, module.guilds)
 	} else {
 		split.shift()
 		commandModule.subCommands = commandModule.subCommands ?? {}
@@ -96,8 +105,9 @@ function searchModule(module) {
 	} else if ((typeof module) === 'object' && (typeof module.name) === 'string') {
 		const split = module.name.split(' ')
 		const commandName = split[0];
-		if (!client.commands.has(commandName)) client.commands.set(commandName, {name: commandName})
+		if (!client.commands.has(commandName)) client.commands.set(commandName, {name: commandName, description: module.description})
 		const commandModule = client.commands.get(commandName)
+		if (module.guilds) addGuilds(commandModule, module.guilds)
 		mergeModules(commandModule, module, split)
 	}
 }
@@ -273,22 +283,22 @@ client.on('guildCreate', async guild => {
 	await updateGuildPermissions(guild.id) // update the command permissions for this new guild
 })
 
-function getSlashCommandData(commandModule, options = [], subCommand = false, group = true) {
+function getSlashCommandData(commandModule, subCommand = false, group = true, ...options) {
 	const commandData = {
 		name: commandModule.name,
 		description: commandModule.description
 	}
 	if (subCommand) {
-		commandData.type = group ? 'SUB_COMMAND_GROUP' : 'SUB_COMMAND'
+		commandData.type = (group && commandModule.subCommands) ? 'SUB_COMMAND_GROUP' : 'SUB_COMMAND'
 	}
 	if (commandModule.options) options.push(...commandModule.options)
 	if (commandModule.subCommands) {
 		commandData.options = []
-		for (const [, subCommandModule] of Object.keys(commandModule.subCommands)) {
-			commandData.options.push(getSlashCommandData(subCommandModule, options, true, !subCommand));
+		for (const subCommandModule of Object.values(commandModule.subCommands)) {
+			commandData.options.push(getSlashCommandData(subCommandModule, true, !subCommand, ...options));
 		}
 	} else {
-		commandData.options = options
+		commandData.options = options || undefined
 	}
 	return commandData
 }
@@ -402,16 +412,12 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 	await executeCommand(commandModule, interaction);
 });
 
-async function executeCommand(commandModule, interaction) {
+async function executeCommand(commandModule, interaction, group = true) {
 	if (commandModule.executors) {
 		for (const executor of commandModule.executors) {
 			try {
 				const result = await executor(interaction);
-				if (result) {
-					timestamps.set(interaction.user.id, now);
-					setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
-					return result;
-				}
+				if (result) return result;
 			} catch (error) {
 				console.error(error);
 				if (interaction.replied || interaction.deferred) { // prevent 'already replied' errors
@@ -419,17 +425,21 @@ async function executeCommand(commandModule, interaction) {
 				} else {
 					await interaction.reply({content: 'There was an error trying to execute that command!', ephemeral: true});
 				}
-				return error;
+				return;
 			}
 		}
 	}
 
-	if (commandModule.subCommands) {
-		for (const subCommandModule of Object.values(commandModule.subCommands)) {
-			const result = executeCommand(subCommandModule, interaction);
-			if (result) return result;
-		}
-	}
+	if (!interaction.options || !commandModule.subCommands) return;
+	let subCommandName;
+	if (group) subCommandName = interaction.options.getSubCommandGroup(false);
+	if (!subCommandName) subCommandName = interaction.options.getSubCommand(false);
+	if (!subCommandName) return;
+
+	const subCommandModule = commandModule.subCommands[subCommandName]
+	if (!subCommandModule) return;
+	const result = await executeCommand(subCommandModule, interaction, false);
+	if (result) return result;
 }
 
 const publicIp = require('public-ip');
