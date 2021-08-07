@@ -6,5 +6,5 @@ module.exports = {
 	cooldown: 5,
 	async execute(interaction) {
 		await interaction.reply(sides[getRandomInt(0, 2)]);
-	},
+	}
 };

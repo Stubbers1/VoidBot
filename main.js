@@ -5,12 +5,14 @@ const Enmap = require('enmap');
 
 client = new Client({intents: [Intents.FLAGS.GUILDS]});
 client.commands = new Collection();
+client.handlers = []
 client.command_data = new Enmap({
   fetchAll: true,
   autoFetch: true,
   cloneLevel: 'deep',
 	autoEnsure: {ids: {}}
 });
+
 // enmap to store user data (at the moment, game stats)
 client.user_data = new Enmap({
 	name: 'user_data',
@@ -60,15 +62,51 @@ getRandomInt = function(min, max) {
 }
 
 // load all the commands found in the commands folder
-const commandFolders = fs.readdirSync('./commands');
+function mergeModules(commandModule, module) {
 
-for (const folder of commandFolders) {
-	const commandFiles = fs.readdirSync(`./commands/${folder}`).filter(file => file.endsWith('.js'));
-	for (const file of commandFiles) {
-		const command = require(`./commands/${folder}/${file}`);
-		client.commands.set(command.name, command);
+}
+
+function searchModule(module) {
+	if (Array.isArray(module)) {
+		for (const subModule of module) {
+			searchModule(subModule);
+		}
+	} else if ((typeof module) === 'function') {
+		self.handlers.push(module)
+	} else if ((typeof module) === 'object' && (typeof module.name) === 'string') {
+		const split = module.name.split(' ')
+		const commandName = split[0];
+		if (!client.commands.has(commandName)) client.commands.set(commandName, {name: commandName})
+		const commandModule = client.commands.get(commandName)
+		if (split.length === 1) {
+			mergeModules(commandModule, module)
+		} else {
+			commandModule.subCommands = commandModule.subCommands ?? {}
+			const subCommandName = split[1]
+			commandModule.subCommands[subCommandName] = commandModule.subCommands[subCommandName] ?? {}
+			const subCommandModule = commandModule.subCommands[subCommandName]
+			if (split.length === 2) {
+				mergeModules(subCommandModule, module)
+			} else {
+				
+			}
+		}
 	}
 }
+
+function searchFolder(folderPath) {
+	const subPaths = fs.readdirSync(folderPath);
+	for (const subPath of subPaths) {
+		const pathStats = fs.statSync(subPath)
+		if (stats.isDirectory()) {
+			searchFolder(subPath);
+		} else if (stats.isFile() && subPath.endsWith('.js')) {
+			const module = require(subPath);
+			searchModule(module);
+		}
+	}
+}
+searchFolder('./commands')
 
 // PERMISSIONS STUFF STARTS HERE //
 // get a permissions array for a specific command in a specific guild

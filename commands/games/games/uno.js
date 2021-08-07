@@ -165,35 +165,38 @@ const view_hand_button = {
   custom_id: 'uno-hand'
 }
 
-module.exports = {
-	name: 'uno',
-	description: 'Creates an Uno game',
-	cooldown: 10,
-  guild_only: true,
-	async execute(interaction) {
-    const channelId = interaction.channelId
-    if (game_states.has(channelId)) return await interaction.reply({content: "There is already a game in this channel!", ephemeral: true})
+module.exports = [
+  {
+    name: 'uno',
+    description: 'Creates an Uno game',
+    cooldown: 10,
+    guild_only: true,
+    async execute(interaction) {
+      const channelId = interaction.channelId
+      if (game_states.has(channelId)) return await interaction.reply({content: "There is already a game in this channel!", ephemeral: true})
 
-    game_states.set(channelId, {owner: interaction.user.id, players: []}) // set the game state to pre-game state
-    await interaction.reply({
-      content: "An Uno game is starting!",
-      components: [
-        {
-          type: 'ACTION_ROW',
-          components: [join_game_button, leave_game_button]
-        },
-        {
-          type: 'ACTION_ROW',
-          components: [start_game_button, cancel_game_button]
-        }
-      ]
-    })
-    return;
-	},
-  async executeComponent(interaction) {
+      game_states.set(channelId, {owner: interaction.user.id, players: []}) // set the game state to pre-game state
+      await interaction.reply({
+        content: "An Uno game is starting!",
+        components: [
+          {
+            type: 'ACTION_ROW',
+            components: [join_game_button, leave_game_button]
+          },
+          {
+            type: 'ACTION_ROW',
+            components: [start_game_button, cancel_game_button]
+          }
+        ]
+      })
+      return;
+    }
+  },
+  async (interaction) => {
     if (!interaction.isButton()) return;
     
     const custom_id = interaction.customId;
+    if (!custom_id.startsWith('uno-')) return;
     const channelId = interaction.channelId;
     if (!game_states.has(channelId)) return await interaction.reply({content: "There isn't an Uno game here.", ephemeral: true});
 
@@ -552,4 +555,4 @@ module.exports = {
       })
     }
   }
-};
+];

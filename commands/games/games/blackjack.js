@@ -12,56 +12,61 @@ function getName(card) {
   return `${valuesMap[card % 13]} of ${suitsMap[Math.floor(card / 13)]}`
 }
 
-module.exports = {
-	name: 'blackjack',
-	description: 'Start a game of blackjack',
-	cooldown: 30,
-	async execute(interaction) {
-    const player = interaction.user
-    const deck = Array.from(Array(52).keys())
-    const hand = []
-    for (let i = 0; i < 2; i++) {
-      hand.push(deck.splice(getRandomInt(0, deck.length), 1)[0]);
-    }
-    const value = getValue(hand);
-    let content = `You got dealt the **${getName(hand[0])}** and the **${getName(hand[1])}**.\n`
-    if (value === 21) {
-      content += "Blackjack!"
-    } else {
-      content += `Value: ${value}\nChoose to hit (get another card) or stick (stop with your current hand):`
-    }
-    const components = [
-      {
-        type: 'ACTION_ROW',
-        components: [
-          {
-            type: 'BUTTON',
-            label: 'Hit',
-            custom_id: `blackjack-hit-${player.id}-${hand.join(',')}`,
-            style: 'DANGER'
-          },
-          {
-            type: 'BUTTON',
-            label: 'Stick',
-            custom_id: `blackjack-stick-${player.id}-${hand.join(',')}`,
-            style: 'PRIMARY'
-          }
-        ]
+module.exports = [
+  {
+    name: 'blackjack',
+    description: 'Start a game of blackjack',
+    cooldown: 30,
+    async execute(interaction) {
+      const player = interaction.user
+      const deck = Array.from(Array(52).keys())
+      const hand = []
+      for (let i = 0; i < 2; i++) {
+        hand.push(deck.splice(getRandomInt(0, deck.length), 1)[0]);
       }
-    ]
-    await interaction.reply({
-      content: content,
-      components: (value === 21) ? [] : components
-    });
-	},
-  async executeComponent(interaction) {
+      const value = getValue(hand);
+      let content = `You got dealt the **${getName(hand[0])}** and the **${getName(hand[1])}**.\n`
+      if (value === 21) {
+        content += "Blackjack!"
+      } else {
+        content += `Value: ${value}\nChoose to hit (get another card) or stick (stop with your current hand):`
+      }
+      const components = [
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {
+              type: 'BUTTON',
+              label: 'Hit',
+              custom_id: `blackjack-hit-${player.id}-${hand.join(',')}`,
+              style: 'DANGER'
+            },
+            {
+              type: 'BUTTON',
+              label: 'Stick',
+              custom_id: `blackjack-stick-${player.id}-${hand.join(',')}`,
+              style: 'PRIMARY'
+            }
+          ]
+        }
+      ]
+      await interaction.reply({
+        content: content,
+        components: (value === 21) ? [] : components
+      });
+    }
+  },
+  async (interaction) => {
     if (!interaction.isButton()) return;
     
     const custom_id = interaction.customId;
-    const [ game, action, playerId, handString ] = custom_id.split('-');
+    if (!custom_id.startsWith('blackjack-')) return;
+    const split = custom_id.split('-');
+    if (split.length !== 4) return;
+    const [ , action, playerId, handString ] = split;
     if (interaction.user.id !== playerId) return await interaction.reply({content: "You didn't start this game!", ephemeral: true});
 
-    await interaction.deferUpdate()
+    await interaction.deferUpdate();
     
     const hand = handString.split(',').map(card => parseInt(card, 10))
     const deck = Array.from(Array(52).keys()).filter(card => !hand.includes(card))
@@ -86,4 +91,4 @@ module.exports = {
     
     await interaction.message.edit({content: content, components: components})
   }
-};
+];

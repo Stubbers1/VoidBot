@@ -9,62 +9,67 @@ const game_states = new Enmap({
 
 const choicesMap = ['rock', 'paper', 'scissors']
 
-module.exports = {
-	name: 'rps',
-	description: 'Challenge someone to rock paper scissors',
-	cooldown: 60,
-  options: [
-    {
-      name: 'opponent',
-      type: 'USER',
-      description: "The user to challenge",
-      required: true
+module.exports = [
+  {
+    name: 'rps',
+    description: 'Challenge someone to rock paper scissors',
+    cooldown: 60,
+    options: [
+      {
+        name: 'opponent',
+        type: 'USER',
+        description: "The user to challenge",
+        required: true
+      }
+    ],
+    async execute(interaction) {
+      const challenger = interaction.user
+      const opponent = interaction.options.getUser('opponent', true)
+      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
+      await interaction.defer()
+      let content = `<@${challenger.id}> challenges <@${opponent.id}> to a game of rock paper scissors!`
+      await interaction.editReply({
+        content: content,
+        components: [
+          {
+            type: 'ACTION_ROW',
+            components: [
+              {
+                type: 'BUTTON',
+                label: 'Rock',
+                style: 'PRIMARY',
+                emoji: '🪨',
+                custom_id: `rps-0-${challenger.id}-${opponent.id}`
+              },
+              {
+                type: 'BUTTON',
+                label: 'Paper',
+                style: 'PRIMARY',
+                emoji: '📄',
+                custom_id: `rps-1-${challenger.id}-${opponent.id}`
+              },
+              {
+                type: 'BUTTON',
+                label: 'Scissors',
+                style: 'PRIMARY',
+                emoji: '✂️',
+                custom_id: `rps-2-${challenger.id}-${opponent.id}`
+              }
+            ]
+          }
+        ]
+      });
+      game_states.set(interaction.id, [null, opponent.id === client.user.id ? getRandomInt(0, 3) : null])
     }
-  ],
-	async execute(interaction) {
-    const challenger = interaction.user
-    const opponent = interaction.options.getUser('opponent', true)
-    if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
-    await interaction.defer()
-    let content = `<@${challenger.id}> challenges <@${opponent.id}> to a game of rock paper scissors!`
-    await interaction.editReply({
-      content: content,
-      components: [
-        {
-          type: 'ACTION_ROW',
-          components: [
-            {
-              type: 'BUTTON',
-              label: 'Rock',
-              style: 'PRIMARY',
-              emoji: '🪨',
-              custom_id: `rps-0-${challenger.id}-${opponent.id}`
-            },
-            {
-              type: 'BUTTON',
-              label: 'Paper',
-              style: 'PRIMARY',
-              emoji: '📄',
-              custom_id: `rps-1-${challenger.id}-${opponent.id}`
-            },
-            {
-              type: 'BUTTON',
-              label: 'Scissors',
-              style: 'PRIMARY',
-              emoji: '✂️',
-              custom_id: `rps-2-${challenger.id}-${opponent.id}`
-            }
-          ]
-        }
-      ]
-    });
-    game_states.set(interaction.id, [null, opponent.id === client.user.id ? getRandomInt(0, 3) : null])
-	},
-  async executeComponent(interaction) {
+  },
+  async (interaction) => {
     if (!interaction.isButton()) return;
     
     const custom_id = interaction.customId
-    const [ , choiceString, challengerId, opponentId ] = custom_id.split('-')
+    if (!custom_id.startsWith('rps-')) return;
+    const split = custom_id.split('-');
+    if (split.length !== 4) return;
+    const [ , choiceString, challengerId, opponentId ] = split;
     const choice = parseInt(choiceString, 10)
 
     if (interaction.user.id !== challengerId && interaction.user.id !== opponentId) return await interaction.reply({content: "You're not part of this game!", ephemeral: true})
@@ -97,4 +102,4 @@ module.exports = {
     }
     await interaction.update({content: content, allowedMentions: {parse: []}, components: []})
   }
-};
+];

@@ -68,7 +68,10 @@ module.exports = {
     if (!interaction.isButton()) return;
 
     const custom_id = interaction.customId
-    const [ , , challengerId, opponentId ] = custom_id.split('-') // split up the custom id to get the individual pieces of data
+    if (!custom_id.startsWith('tictactoe-')) return;
+    const split = custom_id.split('-')
+    if (split.length !== 4) return;
+    const [ , , challengerId, opponentId ] = split;
 
     let challenger_plays = 0, opponent_plays = 0;
 
