@@ -63,7 +63,20 @@ getRandomInt = function(min, max) {
 
 // load all the commands found in the commands folder
 function mergeModules(commandModule, module) {
+	
+}
 
+function checkMergeModules(commandModule, module, split) {
+	if (split.length === 1) {
+		mergeModules(commandModule, module)
+	} else {
+		split.shift()
+		commandModule.subCommands = commandModule.subCommands ?? {}
+		const subCommandName = split[0]
+		commandModule.subCommands[subCommandName] = commandModule.subCommands[subCommandName] ?? {}
+		const subCommandModule = commandModule.subCommands[subCommandName]
+		checkMergeModules(subCommandModule, module, split)
+	}
 }
 
 function searchModule(module) {
@@ -78,19 +91,7 @@ function searchModule(module) {
 		const commandName = split[0];
 		if (!client.commands.has(commandName)) client.commands.set(commandName, {name: commandName})
 		const commandModule = client.commands.get(commandName)
-		if (split.length === 1) {
-			mergeModules(commandModule, module)
-		} else {
-			commandModule.subCommands = commandModule.subCommands ?? {}
-			const subCommandName = split[1]
-			commandModule.subCommands[subCommandName] = commandModule.subCommands[subCommandName] ?? {}
-			const subCommandModule = commandModule.subCommands[subCommandName]
-			if (split.length === 2) {
-				mergeModules(subCommandModule, module)
-			} else {
-				
-			}
-		}
+		checkMergeModules(commandModule, module, split)
 	}
 }
 
