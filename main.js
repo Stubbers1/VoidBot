@@ -62,6 +62,7 @@ function mergeModules(commandModule, module, split, ...parentModules) {
 	if (split.length === 1) {
 		if (module.description) commandModule.description = module.description;
 		if (module.cooldown) commandModule.cooldown = module.cooldown;
+		if (module.guild_only) commandModule.guild_only = true;
 		if (module.options) {
 			commandModule.options = commandModule.options ?? []
 			commandModule.options.push(...module.options)
@@ -364,18 +365,6 @@ client.on('interactionCreate', async interaction => { // when an interaction occ
 	const commandModule = client.commands.get(commandName); // find the command in the collection
 
 	if (!commandModule) return; // this would be problematic (most likely to happen if global commands haven't updated yet - but discord shouldn't send interactions for old commands so this is just a precaution)
-
-	if ((commandModule.guild_only) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}); // handle guild only commands (currently only /ping is non-guild)
-
-	if (interaction.inGuild() && commandModule.permissions) {
-		if (commandModule.permissions.member && !interaction.member.permissionsIn(interaction.channel).has(commandModule.permissions.member)) return await interaction.reply({content: "You don't have permission to use that command.", ephemeral: true})
-		if (commandModule.permissions.bot) {
-			const botMember = await interaction.guild.members.fetch(client.user.id)
-			if (!botMember.permissionsIn(interaction.channel).has(commandModule.permissions.bot)) return await interaction.reply({content: "I don't have the required permissions for that command.", ephemeral: true})
-		}
-	}
-
-	if (commandModule.threadOnly && !interaction.channel.isThread()) return await interaction.reply({content: "This command can only be used in a thread.", ephemeral: true})
 	
 	try {
 		const result = await executeCommand(commandModule, interaction, commandName);
@@ -403,8 +392,20 @@ function processCooldown(commandModule, commandName, userId) {
 }
 
 async function executeCommand(commandModule, interaction, commandName, group = true) {
-	if (!interaction.guildId && (commandModule.guild_only || commandModule.guilds)) return await interaction.reply({content: `\`/${commandName}\` must be executed in a server.`, ephemeral: true}) && false;
+	console.log(commandModule.guild_only, commandName)
+	if ((commandModule.guild_only || commandModule.guilds) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}) && false; // handle guild only commands (currently only /ping is non-guild)
 	if (commandModule.guilds && !commandModule.guilds.includes(interaction.guildId)) return await interaction.reply({content: `\`/${commandName}\` cannot be executed in this server.`, ephemeral: true}) && false;
+
+	if (interaction.inGuild() && commandModule.permissions) {
+		if (commandModule.permissions.member && !interaction.member.permissionsIn(interaction.channel).has(commandModule.permissions.member)) return await interaction.reply({content: "You don't have permission to use that command.", ephemeral: true}) && false;
+		if (commandModule.permissions.bot) {
+			const botMember = await interaction.guild.members.fetch(client.user.id)
+			if (!botMember.permissionsIn(interaction.channel).has(commandModule.permissions.bot)) return await interaction.reply({content: "I don't have the required permissions for that command.", ephemeral: true}) && false;
+		}
+	}
+
+	if (commandModule.threadOnly && !interaction.channel.isThread()) return await interaction.reply({content: "This command can only be used in a thread.", ephemeral: true}) && false;
+
 	if (commandModule.cooldown) {
 		if (!client.cooldowns.has(commandName)) {
 			client.cooldowns.set(commandName, new Collection())
