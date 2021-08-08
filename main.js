@@ -392,7 +392,6 @@ function processCooldown(commandModule, commandName, userId) {
 }
 
 async function executeCommand(commandModule, interaction, commandName, group = true) {
-	console.log(commandModule.guild_only, commandName)
 	if ((commandModule.guild_only || commandModule.guilds) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}) && false; // handle guild only commands (currently only /ping is non-guild)
 	if (commandModule.guilds && !commandModule.guilds.includes(interaction.guildId)) return await interaction.reply({content: `\`/${commandName}\` cannot be executed in this server.`, ephemeral: true}) && false;
 
