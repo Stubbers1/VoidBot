@@ -78,8 +78,6 @@ module.exports = [
     if (split.length !== 4) return;
     const [ , action, playerId, handString ] = split;
     if (interaction.user.id !== playerId) return await interaction.reply({content: "You didn't start this game!", ephemeral: true}) || true;
-
-    await interaction.deferUpdate();
     
     const hand = handString.split(',').map(card => parseInt(card, 10))
     const deck = Array.from(Array(52).keys()).filter(card => !hand.includes(card))
@@ -109,12 +107,12 @@ module.exports = [
         components[0].components[1].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;
       }
     }
-    
+
     if (components.length === 0) {
       user_stats.inc(interaction.user.id, 'played')
     }
     
-    return await interaction.message.edit({content: content, components: components}) || true;
+    return await interaction.update({content: content, components: components}) || true;
   },
   {
     name: 'stats blackjack',
