@@ -392,8 +392,8 @@ function processCooldown(commandModule, commandName, userId) {
 }
 
 async function executeCommand(commandModule, interaction, commandName, group = true) {
-	if ((commandModule.guild_only || commandModule.guilds) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a guild.", ephemeral: true}) && false; // handle guild only commands (currently only /ping is non-guild)
-	if (commandModule.guilds && !commandModule.guilds.includes(interaction.guildId)) return await interaction.reply({content: `\`/${commandName}\` cannot be executed in this server.`, ephemeral: true}) && false;
+	if ((commandModule.guild_only || commandModule.guilds) && !interaction.inGuild()) return await interaction.reply({content: "This command can only be used in a server.", ephemeral: true}) && false; // handle guild only commands (currently only /ping is non-guild)
+	if (commandModule.guilds && !commandModule.guilds.includes(interaction.guildId)) return await interaction.reply({content: `\`/${commandName}\` cannot be used in this server.`, ephemeral: true}) && false;
 
 	if (interaction.inGuild() && commandModule.permissions) {
 		if (commandModule.permissions.member && !interaction.member.permissionsIn(interaction.channel).has(commandModule.permissions.member)) return await interaction.reply({content: "You don't have permission to use that command.", ephemeral: true}) && false;
