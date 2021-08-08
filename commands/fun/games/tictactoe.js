@@ -95,11 +95,15 @@ module.exports = [
     let finished = true
     let buttonPressed
     // count the plays already made by each player & check if the entire board is disabled
-    for (let actionRow of interaction.message.components) {
+    let components = interaction.message.components
+    if ((typeof interaction.message.components[0].toJSON) === 'function') {
+      components = components.map(component => component.toJSON())
+    }
+    for (let actionRow of components) {
       for (let button of actionRow.components) {
         if (button.label === 'X') challenger_plays++;
         if (button.label === 'O') opponent_plays++;
-        if (button.customId === custom_id) buttonPressed = button
+        if (button.custom_id === custom_id) buttonPressed = button
         finished = finished && button.disabled
       }
     }
@@ -110,8 +114,6 @@ module.exports = [
     if ((challenger_turn ? challengerId : opponentId) !== interaction.user.id) return await interaction.reply({content: "It isn't your turn!", ephemeral: true}) || true;
 
     if (buttonPressed.label !== '-') return await interaction.reply({content: "You must play in an empty space!", ephemeral: true}) || true;
-
-    await interaction.deferUpdate(); // let discord know we're gonna edit the message... soon
 
     // update the button
     buttonPressed.label = challenger_turn ? 'X' : 'O';
@@ -125,8 +127,6 @@ module.exports = [
       opponent_plays++;
     }
     challenger_turn = !challenger_turn // swap the turn
-
-    const components = interaction.message.components.map(component => component.toJSON()); // convert the message components back to JSON
 
     let botPlayCoords;
     // if the bot player needs to make a move
@@ -213,7 +213,7 @@ module.exports = [
       }
     }
 
-    await interaction.message.edit({content: content, components: components, allowedMentions: winner === undefined ? {users: [challenger_turn ? opponentId : challengerId]} : {parse: []}});
+    await interaction.update({content: content, components: components, allowedMentions: winner === undefined ? {users: [challenger_turn ? opponentId : challengerId]} : {parse: []}});
   },
   {
     name: 'stats tictactoe',

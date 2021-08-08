@@ -90,6 +90,7 @@ module.exports = [
 
     let content = `Hand: **${hand.map(getName).join('**, **')}**.\n`
 
+    let components = []
     user_stats.ensure(interaction.user.id)
     if (value === 21) {
       content += "Blackjack!"
@@ -99,11 +100,16 @@ module.exports = [
       user_stats.inc(interaction.user.id, 'bust')
     } else {
       content += `Value: ${value}`
+      if (action === 'hit') {
+        components = interaction.message.components
+        if ((typeof interaction.message.components[0].toJSON) === 'function') {
+          components = components.map(component => component.toJSON())
+        }
+        components[0].components[0].custom_id = `blackjack-hit-${playerId}-${hand.join(',')}`;
+        components[0].components[1].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;
+      }
     }
-
-    const components = (value >= 21 || action === "stick") ? [] : interaction.message.components.map(component => component.toJSON());
-    if (components.length > 0) components[0].components[0].custom_id = `blackjack-hit-${playerId}-${hand.join(',')}`;
-    if (components.length > 0) components[0].components[1].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;
+    
     if (components.length === 0) {
       user_stats.inc(interaction.user.id, 'played')
     }
