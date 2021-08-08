@@ -1,3 +1,4 @@
+const Enmap = require('enmap');
 const getValue = label => label === 'X' ? 1 : (label === 'O' ? -1 : 0)
 
 function getRandomInt(min, max) {
@@ -6,69 +7,88 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min)) + min;
 }
 
-module.exports = {
-	name: 'tictactoe',
-	description: 'Challenge someone to tic tac toe',
-	cooldown: 30,
-  options: [
-    {
-      name: 'opponent',
-      type: 'USER',
-      description: "The user to challenge",
-      required: true
-    }
-  ],
-	async execute(interaction) {
-    const challenger = interaction.user
-    const opponent = interaction.options.getUser('opponent', true)
-    if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
-    let content = `<@${challenger.id}> (X) challenges <@${opponent.id}> (O) to a game of tic tac toe! <@${opponent.id}> will play first.`
-    const components = [
-      {
-        type: 'ACTION_ROW',
-        components: [
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-00-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-01-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-02-${challenger.id}-${opponent.id}`},
-        ]
-      },
-      {
-        type: 'ACTION_ROW',
-        components: [
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-10-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-11-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-12-${challenger.id}-${opponent.id}`},
-        ]
-      },
-      {
-        type: 'ACTION_ROW',
-        components: [
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-20-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-21-${challenger.id}-${opponent.id}`},
-          {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-22-${challenger.id}-${opponent.id}`},
-        ]
-      },
-    ]
-    // if the opponent is the bot, make a random move
-    if (opponent.id === client.user.id) {
-      const i = getRandomInt(0, 3)
-      const j = getRandomInt(0, 3)
+const user_stats = new Enmap({
+	name: 'tictactoe_stats',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+    played: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0
+  }
+});
 
-      Object.assign(components[i].components[j], {label: 'O', style: 'DANGER', disabled: true})
+module.exports = [
+  {
+    name: 'game tictactoe',
+    description: 'Challenge someone to tic tac toe',
+    cooldown: 30,
+    options: [
+      {
+        name: 'opponent',
+        type: 'USER',
+        description: "The user to challenge",
+        required: true
+      }
+    ],
+    async execute(interaction) {
+      const challenger = interaction.user
+      const opponent = interaction.options.getUser('opponent', true)
+      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true}) && false;
+      let content = `<@${challenger.id}> (X) challenges <@${opponent.id}> (O) to a game of tic tac toe! <@${opponent.id}> will play first.`
+      const components = [
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-00-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-01-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-02-${challenger.id}-${opponent.id}`},
+          ]
+        },
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-10-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-11-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-12-${challenger.id}-${opponent.id}`},
+          ]
+        },
+        {
+          type: 'ACTION_ROW',
+          components: [
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-20-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-21-${challenger.id}-${opponent.id}`},
+            {type: 'BUTTON', label: '-', style: 'SECONDARY', custom_id: `tictactoe-22-${challenger.id}-${opponent.id}`},
+          ]
+        },
+      ]
+      // if the opponent is the bot, make a random move
+      if (opponent.id === client.user.id) {
+        const i = getRandomInt(0, 3)
+        const j = getRandomInt(0, 3)
 
-      content = `<@${challenger.id}> (X) has challenged me (O) to a game of tic-tac-toe! I've made my first move.`
+        Object.assign(components[i].components[j], {label: 'O', style: 'DANGER', disabled: true})
+
+        content = `<@${challenger.id}> (X) has challenged me (O) to a game of tic-tac-toe! I've made my first move.`
+      }
+      await interaction.reply({
+        content: content,
+        components: components,
+        allowedMentions: {users: [(opponent.id === client.user.id) ? challenger.id : opponent.id]}
+      });
+      return true;
     }
-    await interaction.reply({
-      content: content,
-      components: components,
-      allowedMentions: {users: [(opponent.id === client.user.id) ? challenger.id : opponent.id]}
-    });
-	},
-  async executeComponent(interaction) {
+  },
+  async (interaction) => {
     if (!interaction.isButton()) return;
 
     const custom_id = interaction.customId
-    const [ , , challengerId, opponentId ] = custom_id.split('-') // split up the custom id to get the individual pieces of data
+    if (!custom_id.startsWith('tictactoe-')) return;
+    const split = custom_id.split('-')
+    if (split.length !== 4) return;
+    const [ , , challengerId, opponentId ] = split;
 
     let challenger_plays = 0, opponent_plays = 0;
 
@@ -84,12 +104,12 @@ module.exports = {
       }
     }
 
-    if (finished || opponent_plays === 5) return await interaction.reply({content: "This game is over!", ephemeral: true})
+    if (finished || opponent_plays === 5) return await interaction.reply({content: "This game is over!", ephemeral: true}) || true;
 
     let challenger_turn = challenger_plays < opponent_plays;
-    if ((challenger_turn ? challengerId : opponentId) !== interaction.user.id) return await interaction.reply({content: "It isn't your turn!", ephemeral: true})
+    if ((challenger_turn ? challengerId : opponentId) !== interaction.user.id) return await interaction.reply({content: "It isn't your turn!", ephemeral: true}) || true;
 
-    if (buttonPressed.label !== '-') return await interaction.reply({content: "You must play in an empty space!", ephemeral: true})
+    if (buttonPressed.label !== '-') return await interaction.reply({content: "You must play in an empty space!", ephemeral: true}) || true;
 
     await interaction.deferUpdate(); // let discord know we're gonna edit the message... soon
 
@@ -177,19 +197,39 @@ module.exports = {
           components[i].components[j].disabled = true;
         }
       }
-      client.user_data.ensure(challengerId)
-      client.user_data.ensure(opponentId)
-      client.user_data.inc(challengerId, 'stats.tictactoe.played')
-      client.user_data.inc(opponentId, 'stats.tictactoe.played')
+      user_stats.ensure(challengerId)
+      user_stats.ensure(opponentId)
+      user_stats.inc(challengerId, 'played')
+      user_stats.inc(opponentId, 'played')
       content = `<@${challengerId}> (X) challenged <@${opponentId}> (O) - `
       if (winner === null) {
         content += `the result was a draw.`
+        user_stats.inc(challengerId, 'draws')
+        user_stats.inc(opponentId, 'draws')
       } else {
-        client.user_data.inc(winner, 'stats.tictactoe.wins')
+        user_stats.inc(winner, 'wins')
+        user_stats.inc((winner === challengerId) ? opponentId : challengerId, 'losses')
         content += `<@${winner}> won!`
       }
     }
 
     await interaction.message.edit({content: content, components: components, allowedMentions: winner === undefined ? {users: [challenger_turn ? opponentId : challengerId]} : {parse: []}});
+  },
+  {
+    name: 'stats tictactoe',
+    description: "Get a user's stats for tic tac toe games.",
+    async execute(interaction) {
+      const user = interaction.options.getUser('user', true);
+      user_stats.ensure(user.id);
+      const played = user_stats.get(user.id, 'played');
+      const wins = user_stats.get(user.id, 'wins');
+      const losses = user_stats.get(user.id, 'losses');
+      const draws = user_stats.get(user.id, 'draws');
+      return await interaction.reply({content: `Tic tac toe stats for <@${user.id}>:
+\`\`\`Games played: ${played}
+Wins: ${wins}
+Losses: ${losses}
+Draws: ${draws}\`\`\``, allowedMentions: {parse: []}}) || true;
+    }
   }
-};
+];

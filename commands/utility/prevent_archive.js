@@ -1,5 +1,5 @@
 module.exports = {
-	name: 'prevent',
+	name: 'prevent archive',
 	description: "Prevent a thread from being auto-archived",
 	cooldown: 30,
 	guild_only: true,
@@ -9,17 +9,10 @@ module.exports = {
   },
 	options: [
 		{
-			name: 'archive',
-			type: 'SUB_COMMAND',
-			description:"Prevent a thread from being auto-archived",
-			options: [
-				{
-					name: 'thread',
-					type: 'CHANNEL',
-					description: "The thread in which to prevent auto-archiving",
-					required: true
-				}
-			]
+			name: 'thread',
+			type: 'CHANNEL',
+			description: "The thread in which to prevent auto-archiving",
+			required: true
 		}
 	],
 	async execute(interaction) {
@@ -41,9 +34,8 @@ module.exports = {
 		}
 		client.scheduled_settings.set('unarchive_threads', threadIds)
 		if (threadIds.includes(thread.id)) {
-			await interaction.editReply(`Now preventing auto-archive in <#${thread.id}>!`)
-		} else {
-			await interaction.editReply(`No longer preventing auto-archive in <#${thread.id}>.`)
+			return await interaction.editReply(`Now preventing auto-archive in <#${thread.id}>!`) || true;
 		}
+		return await interaction.editReply(`No longer preventing auto-archive in <#${thread.id}>.`) || true;
 	}
 };

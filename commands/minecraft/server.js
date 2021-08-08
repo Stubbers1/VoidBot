@@ -121,7 +121,6 @@ watcher.on('change', async filePath => {
 module.exports = {
 	name: 'server',
   description: "Minecraft server-related commands.",
-  cooldown: 0,
   guilds: ['819595876687151165', '690875821552042054', '785952005649596416'],
   options: [
     {
@@ -164,8 +163,7 @@ module.exports = {
           }
         }
         server_process.stdout.on('data', checkData)
-        server_process.stdout.pipe(process.stdout)
-        break;
+        return true;
       case 'stop':
         if (server_process === null) return await interaction.editReply("There isn't a server to stop.")
         if (!started) return await interaction.editReply("The server hasn't started yet!")
@@ -177,7 +175,7 @@ module.exports = {
           await interaction.followUp({content: "Server stopped.", ephemeral: true});
         });
         server_process.stdin.write("stop\n")
-        break;
+        return true;
     }
 	},
 };

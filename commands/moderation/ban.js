@@ -36,6 +36,6 @@ module.exports = {
     const days = interaction.options.getString('days')
     const reason = interaction.options.getString('reason')
     await member.ban({days: days ?? undefined, reason: `${interaction.user.tag}: ${reason ?? 'No reason given'}`})
-		await interaction.editReply(`Banned <@${user.id}>`);
+		return await interaction.editReply(`Banned <@${user.id}>`) || true;
 	}
 };

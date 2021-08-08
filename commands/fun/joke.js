@@ -12,5 +12,6 @@ module.exports = {
 			message += `\n\n||${joke.delivery}||`
 		}
 		await interaction.editReply(message + `\nSource: https://sv443.net/jokeapi/v2/`)
+		return true;
 	},
 };

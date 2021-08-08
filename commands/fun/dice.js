@@ -20,5 +20,6 @@ module.exports = {
 	async execute(interaction) {
     const max = interaction.options.getInteger('type') ?? 6
 		await interaction.reply(getRandomInt(1, max + 1).toString());
+    return true;
 	},
 };
