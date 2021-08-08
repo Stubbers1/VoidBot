@@ -1,10 +1,23 @@
 const Enmap = require('enmap');
 
 const game_states = new Enmap({
-  name: "rps_games",
-  fetchAll: true,
+  name: 'rps_games',
+  fetchAll: false,
   autoFetch: true,
   cloneLevel: 'deep'
+});
+
+const user_stats = new Enmap({
+	name: 'rps_stats',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+    played: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0
+  }
 });
 
 const choicesMap = ['rock', 'paper', 'scissors']
@@ -25,8 +38,8 @@ module.exports = [
     async execute(interaction) {
       const challenger = interaction.user
       const opponent = interaction.options.getUser('opponent', true)
-      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
-      await interaction.defer()
+      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true}) && false;
+      await interaction.defer();
       let content = `<@${challenger.id}> challenges <@${opponent.id}> to a game of rock paper scissors!`
       await interaction.editReply({
         content: content,
@@ -88,19 +101,40 @@ module.exports = [
     game_states.delete(interaction.message.interaction.id)
 
     let content = `<@${challengerId}> chose **${choicesMap[challengerChoice]}**.\n<@${opponentId}> chose **${choicesMap[opponentChoice]}**.\n`
-    client.user_data.ensure(challengerId)
-    client.user_data.ensure(opponentId)
-    client.user_data.inc(challengerId, 'stats.rps.played')
-    client.user_data.inc(opponentId, 'stats.rps.played')
+    user_stats.ensure(challengerId)
+    user_stats.ensure(opponentId)
+    user_stats.inc(challengerId, 'played')
+    user_stats.inc(opponentId, 'played')
     if (challengerChoice === opponentChoice) {
+      user_stats.inc(challengerId, 'draws')
+      user_stats.inc(opponentId, 'draws')
       content += `Draw!`
     } else if (challengerChoice === (opponentChoice + 1) % 3) {
-      client.user_data.inc(challengerId, 'stats.rps.wins')
+      user_stats.inc(challengerId, 'wins')
+      user_stats.inc(opponentId, 'losses')
       content += `<@${challengerId}> wins!`
     } else {
-      client.user_data.inc(opponentId, 'stats.rps.wins')
+      user_stats.inc(opponentId, 'wins')
+      user_stats.inc(challengerId, 'losses')
       content += `<@${opponentId}> wins!`
     }
     return await interaction.update({content: content, allowedMentions: {parse: []}, components: []}) || true;
+  },
+  {
+    name: 'stats rps',
+    description: "Get a user's stats for rock paper scissors games.",
+    async execute(interaction) {
+      const user = interaction.options.getUser('user', true);
+      user_stats.ensure(user.id);
+      const played = user_stats.get(user.id, 'played');
+      const wins = user_stats.get(user.id, 'wins');
+      const losses = user_stats.get(user.id, 'losses');
+      const draws = user_stats.get(user.id, 'draws');
+      return await interaction.reply({content: `Rock paper scissors stats for <@${user.id}>:
+\`\`\`Games played: ${played}
+Wins: ${wins}
+Losses: ${losses}
+Draws: ${draws}\`\`\``, allowedMentions: {parse: []}}) || true;
+    }
   }
 ];

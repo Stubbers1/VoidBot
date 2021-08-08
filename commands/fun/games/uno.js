@@ -59,10 +59,22 @@ function incrementTurn(channelId) {
 }
 
 const game_states = new Enmap({
-  name: "uno_games",
-  fetchAll: true,
+  name: 'uno_games',
+  fetchAll: false,
   autoFetch: true,
   cloneLevel: 'deep'
+});
+
+const user_stats = new Enmap({
+	name: 'uno_stats',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+    played: 0,
+    wins: 0,
+    cards_drawn: 0
+  }
 });
 
 // deal n random cards from the deck to a player
@@ -79,6 +91,8 @@ function dealCards(channelId, playerId, no = 1) {
     dealtCards.push(deck.splice(getRandomInt(0, deck.length), 1)[0])
     hand.push(dealtCards[i]);
   }
+  user_stats.ensure(playerId)
+  user_stats.math(playerId, '+', dealtCards.length, 'cards_drawn')
   return dealtCards
 }
 
@@ -121,9 +135,9 @@ function endGame(channelId) {
 
   for (let i = 0; i < players.length; i++) {
     const playerId = players[i]
-    client.user_data.ensure(playerId)
-    client.user_data.inc(playerId, 'stats.uno.played')
-    if (game_states.get(channelId, `hands.${playerId}`).length === 0) client.user_data.inc(playerId, 'stats.uno.wins');
+    user_stats.ensure(playerId)
+    user_stats.inc(playerId, 'played')
+    if (game_states.get(channelId, `hands.${playerId}`).length === 0) user_stats.inc(playerId, 'wins');
   }
 
   game_states.delete(channelId)
@@ -556,6 +570,21 @@ module.exports = [
           }
         ]
       }) || true;
+    }
+  },
+  {
+    name: 'stats uno',
+    description: "Get a user's stats for Uno games.",
+    async execute(interaction) {
+      const user = interaction.options.getUser('user');
+      user_stats.ensure(user.id)
+      const played = user_stats.get(user.id, 'played')
+      const wins = user_stats.get(user.id, 'wins')
+      const cards_drawn = user_stats.get(user.id, 'cards_drawn')
+      return await interaction.reply({content: `Uno stats for <@${user.id}>:
+\`\`\`Games played: ${played}
+Wins: ${wins}
+Total cards drawn: ${cards_drawn}\`\`\``, allowedMentions: {parse: []}}) || true;
     }
   }
 ];

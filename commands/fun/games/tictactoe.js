@@ -1,3 +1,4 @@
+const Enmap = require('enmap');
 const getValue = label => label === 'X' ? 1 : (label === 'O' ? -1 : 0)
 
 function getRandomInt(min, max) {
@@ -5,6 +6,19 @@ function getRandomInt(min, max) {
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min)) + min;
 }
+
+const user_stats = new Enmap({
+	name: 'tictactoe_stats',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+    played: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0
+  }
+});
 
 module.exports = [
   {
@@ -22,7 +36,7 @@ module.exports = [
     async execute(interaction) {
       const challenger = interaction.user
       const opponent = interaction.options.getUser('opponent', true)
-      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true})
+      if (challenger.id === opponent.id) return await interaction.reply({content: "You can't challenge yourself!", ephemeral: true}) && false;
       let content = `<@${challenger.id}> (X) challenges <@${opponent.id}> (O) to a game of tic tac toe! <@${opponent.id}> will play first.`
       const components = [
         {
@@ -183,19 +197,39 @@ module.exports = [
           components[i].components[j].disabled = true;
         }
       }
-      client.user_data.ensure(challengerId)
-      client.user_data.ensure(opponentId)
-      client.user_data.inc(challengerId, 'stats.tictactoe.played')
-      client.user_data.inc(opponentId, 'stats.tictactoe.played')
+      user_stats.ensure(challengerId)
+      user_stats.ensure(opponentId)
+      user_stats.inc(challengerId, 'played')
+      user_stats.inc(opponentId, 'played')
       content = `<@${challengerId}> (X) challenged <@${opponentId}> (O) - `
       if (winner === null) {
         content += `the result was a draw.`
+        user_stats.inc(challengerId, 'draws')
+        user_stats.inc(opponentId, 'draws')
       } else {
-        client.user_data.inc(winner, 'stats.tictactoe.wins')
+        user_stats.inc(winner, 'wins')
+        user_stats.inc((winner === challengerId) ? opponentId : challengerId, 'losses')
         content += `<@${winner}> won!`
       }
     }
 
     await interaction.message.edit({content: content, components: components, allowedMentions: winner === undefined ? {users: [challenger_turn ? opponentId : challengerId]} : {parse: []}});
+  },
+  {
+    name: 'stats tictactoe',
+    description: "Get a user's stats for tic tac toe games.",
+    async execute(interaction) {
+      const user = interaction.options.getUser('user', true);
+      user_stats.ensure(user.id);
+      const played = user_stats.get(user.id, 'played');
+      const wins = user_stats.get(user.id, 'wins');
+      const losses = user_stats.get(user.id, 'losses');
+      const draws = user_stats.get(user.id, 'draws');
+      return await interaction.reply({content: `Tic tac toe stats for <@${user.id}>:
+\`\`\`Games played: ${played}
+Wins: ${wins}
+Losses: ${losses}
+Draws: ${draws}\`\`\``, allowedMentions: {parse: []}}) || true;
+    }
   }
 ];

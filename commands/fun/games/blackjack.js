@@ -1,3 +1,4 @@
+const Enmap = require('enmap')
 const valuesMap = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"]
 const suitsMap = ["Hearts", "Spades", "Clubs", "Diamonds"]
 
@@ -11,6 +12,18 @@ function getValue(hand) {
 function getName(card) {
   return `${valuesMap[card % 13]} of ${suitsMap[Math.floor(card / 13)]}`
 }
+
+const user_stats = new Enmap({
+	name: 'blackjack_stats',
+	fetchAll: false,
+  autoFetch: true,
+  cloneLevel: 'deep',
+  autoEnsure: {
+    played: 0,
+    bust: 0,
+    blackjack: 0
+  }
+});
 
 module.exports = [
   {
@@ -77,10 +90,13 @@ module.exports = [
 
     let content = `Hand: **${hand.map(getName).join('**, **')}**.\n`
 
+    user_stats.ensure(interaction.user.id)
     if (value === 21) {
       content += "Blackjack!"
+      user_stats.inc(interaction.user.id, 'blackjack')
     } else if (value > 21) {
       content += "Bust!"
+      user_stats.inc(interaction.user.id, 'bust')
     } else {
       content += `Value: ${value}`
     }
@@ -88,7 +104,25 @@ module.exports = [
     const components = (value >= 21 || action === "stick") ? [] : interaction.message.components.map(component => component.toJSON());
     if (components.length > 0) components[0].components[0].custom_id = `blackjack-hit-${playerId}-${hand.join(',')}`;
     if (components.length > 0) components[0].components[1].custom_id = `blackjack-stick-${playerId}-${hand.join(',')}`;
+    if (components.length === 0) {
+      user_stats.inc(interaction.user.id, 'played')
+    }
     
     return await interaction.message.edit({content: content, components: components}) || true;
+  },
+  {
+    name: 'stats blackjack',
+    description: "Get a user's stats for blackjack games.",
+    async execute(interaction) {
+      const user = interaction.options.getUser('user');
+      user_stats.ensure(user.id)
+      const played = user_stats.get(user.id, 'played')
+      const bust = user_stats.get(user.id, 'bust')
+      const blackjack = user_stats.get(user.id, 'blackjack')
+      return await interaction.reply({content: `Blackjack stats for <@${user.id}>:
+\`\`\`Games played: ${played}
+Went bust: ${bust}
+Got blackjack: ${blackjack}\`\`\``, allowedMentions: {parse: []}}) || true;
+    }
   }
 ];

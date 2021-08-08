@@ -20,23 +20,7 @@ client.user_data = new Enmap({
 	name: 'user_data',
 	fetchAll: false,
   autoFetch: true,
-  cloneLevel: 'deep',
-  autoEnsure: {
-		stats: {
-			uno: {
-				wins: 0,
-				played: 0
-			},
-			tictactoe: {
-				wins: 0,
-				played: 0
-			},
-			rps: {
-				wins: 0,
-				played: 0
-			}
-		}
-	} // default user data goes here
+  cloneLevel: 'deep'
 });
 client.cooldowns = new Collection(); // stores the last time a user used a command
 // per-guild settings
