@@ -5,7 +5,6 @@ module.exports = {
 	description: 'Flip a coin',
 	cooldown: 5,
 	async execute(interaction) {
-		await interaction.reply(sides[getRandomInt(0, 2)]);
-		return true;
+		return await interaction.reply(sides[getRandomInt(0, 2)]) || true;
 	}
 };
