@@ -1,590 +1,836 @@
 const Enmap = require('enmap');
 
-const colours = ["red", "yellow", "blue", "green"]
-const names = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+2", "reverse", "skip"]
-const wildNames = ["card", "+4"]
+const colours = ['red', 'yellow', 'blue', 'green'];
+const names = [
+	'0',
+	'1',
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+	'+2',
+	'reverse',
+	'skip'
+];
+const wildNames = ['card', '+4'];
 
 function mod(a, b) {
-  return ((a % b) + b) % b
+	return ((a % b) + b) % b;
 }
 
 // https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
 function shuffle(array) {
-  var currentIndex = array.length,  randomIndex;
+	var currentIndex = array.length,
+		randomIndex;
 
-  while (0 !== currentIndex) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
+	while (0 !== currentIndex) {
+		randomIndex = Math.floor(Math.random() * currentIndex);
+		currentIndex--;
 
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex], array[currentIndex]];
-  }
+		[array[currentIndex], array[randomIndex]] = [
+			array[randomIndex],
+			array[currentIndex]
+		];
+	}
 
-  return array;
+	return array;
 }
 
 // get a card based on its index within the deck
 function getCard(index, wildColour) {
-  if (index < 100) {
-    return [colours[(index % 4)], names[Math.floor(((index % 25) + 1) / 2)]]
-  }
-  const card = ["wild", wildNames[(index % 2)]]
-  if (wildColour) card.push(wildColour)
-  return card
+	if (index < 100) {
+		return [colours[index % 4], names[Math.floor(((index % 25) + 1) / 2)]];
+	}
+	const card = ['wild', wildNames[index % 2]];
+	if (wildColour) card.push(wildColour);
+	return card;
 }
 
 // get how a card should be displayed
 function getName(card) {
-  let name = card.slice(0, 2).join(" ")
-  if (card.length > 2) {
-    name += " (" + card.slice(2).join(" ") + ")"
-  }
-  return name
+	let name = card.slice(0, 2).join(' ');
+	if (card.length > 2) {
+		name += ' (' + card.slice(2).join(' ') + ')';
+	}
+	return name;
 }
 
 // check if a card is playable based on the card, the top card in the discard and if there is a requirement to draw cards at the moment
 function isPlayable(channelId, card) {
-  const topCard = getTopCard(channelId);
-  const drawRequirement = game_states.get(channelId, 'draw_requirement');
-  if (drawRequirement && card[1] !== "+2") return false;
-  if (card[0] === "wild" || card[0] === topCard[0] || card[1] === topCard[1]) return true;
-  if (topCard[0] === "wild" && card[0] === topCard[2]) return true;
-  return false;
+	const topCard = getTopCard(channelId);
+	const drawRequirement = game_states.get(channelId, 'draw_requirement');
+	if (drawRequirement && card[1] !== '+2') return false;
+	if (card[0] === 'wild' || card[0] === topCard[0] || card[1] === topCard[1])
+		return true;
+	if (topCard[0] === 'wild' && card[0] === topCard[2]) return true;
+	return false;
 }
 
 // increment the turn counter (taking reverse into account)
 function incrementTurn(channelId) {
-  if (game_states.get(channelId, 'reversed')) return game_states.dec(channelId, 'turn')
-  return game_states.inc(channelId, 'turn')
+	if (game_states.get(channelId, 'reversed'))
+		return game_states.dec(channelId, 'turn');
+	return game_states.inc(channelId, 'turn');
 }
 
 const game_states = new Enmap({
-  name: 'uno_games',
-  fetchAll: false,
-  autoFetch: true,
-  cloneLevel: 'deep'
+	name: 'uno_games',
+	fetchAll: false,
+	autoFetch: true,
+	cloneLevel: 'deep'
 });
 
 const user_stats = new Enmap({
 	name: 'uno_stats',
 	fetchAll: false,
-  autoFetch: true,
-  cloneLevel: 'deep',
-  autoEnsure: {
-    played: 0,
-    wins: 0,
-    cards_drawn: 0
-  }
+	autoFetch: true,
+	cloneLevel: 'deep',
+	autoEnsure: {
+		played: 0,
+		wins: 0,
+		cards_drawn: 0
+	}
 });
 
 // deal n random cards from the deck to a player
 function dealCards(channelId, playerId, no = 1) {
-  let deck = game_states.observe(channelId, 'deck')
-  const hand = game_states.observe(channelId, `hands.${playerId}`)
-  const dealtCards = []
-  for (let i = 0; i < no; i++) {
-    if (deck.length === 0) {
-      deck.push(...game_states.get(channelId, 'discard').slice(1))
-      game_states.set(channelId, [game_states.get(channelId, 'discard.0')], 'discard')
-      if (deck.length === 0) break;
-    }
-    dealtCards.push(deck.splice(getRandomInt(0, deck.length), 1)[0])
-    hand.push(dealtCards[i]);
-  }
-  user_stats.ensure(playerId)
-  user_stats.math(playerId, '+', dealtCards.length, 'cards_drawn')
-  return dealtCards
+	let deck = game_states.observe(channelId, 'deck');
+	const hand = game_states.observe(channelId, `hands.${playerId}`);
+	const dealtCards = [];
+	for (let i = 0; i < no; i++) {
+		if (deck.length === 0) {
+			deck.push(...game_states.get(channelId, 'discard').slice(1));
+			game_states.set(
+				channelId,
+				[game_states.get(channelId, 'discard.0')],
+				'discard'
+			);
+			if (deck.length === 0) break;
+		}
+		dealtCards.push(deck.splice(getRandomInt(0, deck.length), 1)[0]);
+		hand.push(dealtCards[i]);
+	}
+	user_stats.ensure(playerId);
+	user_stats.math(playerId, '+', dealtCards.length, 'cards_drawn');
+	return dealtCards;
 }
 
 function getTopCard(channelId) {
-  const topCardIndex = game_states.get(channelId, 'discard.0');
-  const wildColour = game_states.get(channelId, 'wild_colour');
-  return getCard(topCardIndex, wildColour);
+	const topCardIndex = game_states.get(channelId, 'discard.0');
+	const wildColour = game_states.get(channelId, 'wild_colour');
+	return getCard(topCardIndex, wildColour);
 }
 
 // discard a card from a player's hand
 function discardCard(channelId, playerId, cardIndex) {
-  game_states.remove(channelId, cardIndex, `hands.${playerId}`)
-  const discard = game_states.observe(channelId, 'discard')
-  discard.unshift(cardIndex) // add to the start discard
+	game_states.remove(channelId, cardIndex, `hands.${playerId}`);
+	const discard = game_states.observe(channelId, 'discard');
+	discard.unshift(cardIndex); // add to the start discard
 }
 
 function startGame(channelId) {
-  game_states.set(channelId, 0, 'turn')
-  game_states.set(channelId, false, 'reversed')
+	game_states.set(channelId, 0, 'turn');
+	game_states.set(channelId, false, 'reversed');
 
-  const topCardIndex = getRandomInt(0, 4) * 25 + getRandomInt(0, 19);
-  game_states.set(channelId, [topCardIndex], 'discard')
+	const topCardIndex = getRandomInt(0, 4) * 25 + getRandomInt(0, 19);
+	game_states.set(channelId, [topCardIndex], 'discard');
 
-  game_states.set(channelId, Array.from(Array(108).keys()).filter(card => card !== topCardIndex), 'deck');
+	game_states.set(
+		channelId,
+		Array.from(Array(108).keys()).filter(card => card !== topCardIndex),
+		'deck'
+	);
 
-  const players = game_states.observe(channelId, 'players')
-  shuffle(players)
+	const players = game_states.observe(channelId, 'players');
+	shuffle(players);
 
-  for (let i = 0; i < players.length; i++) {
-    const playerId = players[i]
-    game_states.set(channelId, [], `hands.${playerId}`)
-    dealCards(channelId, playerId, 7)
-  }
+	for (let i = 0; i < players.length; i++) {
+		const playerId = players[i];
+		game_states.set(channelId, [], `hands.${playerId}`);
+		dealCards(channelId, playerId, 7);
+	}
 
-  return players
+	return players;
 }
 
 function endGame(channelId) {
-  const players = game_states.get(channelId, 'players')
+	const players = game_states.get(channelId, 'players');
 
-  for (let i = 0; i < players.length; i++) {
-    const playerId = players[i]
-    user_stats.ensure(playerId)
-    user_stats.inc(playerId, 'played')
-    if (game_states.get(channelId, `hands.${playerId}`).length === 0) user_stats.inc(playerId, 'wins');
-  }
+	for (let i = 0; i < players.length; i++) {
+		const playerId = players[i];
+		user_stats.ensure(playerId);
+		user_stats.inc(playerId, 'played');
+		if (game_states.get(channelId, `hands.${playerId}`).length === 0)
+			user_stats.inc(playerId, 'wins');
+	}
 
-  game_states.delete(channelId)
+	game_states.delete(channelId);
 }
 
 // various button structures
 const join_game_button = {
-  type: 'BUTTON',
-  label: "Join",
-  style: 'SUCCESS',
-  custom_id: 'uno-join'
-}
+	type: 'BUTTON',
+	label: 'Join',
+	style: 'SUCCESS',
+	custom_id: 'uno-join'
+};
 
 const leave_game_button = {
-  type: 'BUTTON',
-  label: "Leave",
-  style: 'DANGER',
-  custom_id: 'uno-leave'
-}
+	type: 'BUTTON',
+	label: 'Leave',
+	style: 'DANGER',
+	custom_id: 'uno-leave'
+};
 
 const start_game_button = {
-  type: 'BUTTON',
-  label: "Start Game",
-  style: 'PRIMARY',
-  custom_id: 'uno-start'
-}
+	type: 'BUTTON',
+	label: 'Start Game',
+	style: 'PRIMARY',
+	custom_id: 'uno-start'
+};
 
 const cancel_game_button = {
-  type: 'BUTTON',
-  label: "Cancel Game",
-  style: 'SECONDARY',
-  custom_id: 'uno-cancel'
-}
+	type: 'BUTTON',
+	label: 'Cancel Game',
+	style: 'SECONDARY',
+	custom_id: 'uno-cancel'
+};
 
 const view_hand_button = {
-  type: 'BUTTON',
-  label: 'View Hand',
-  style: 'PRIMARY',
-  custom_id: 'uno-hand'
-}
+	type: 'BUTTON',
+	label: 'View Hand',
+	style: 'PRIMARY',
+	custom_id: 'uno-hand'
+};
 
 module.exports = [
-  {
-    name: 'game uno',
-    description: 'Create an Uno game',
-    cooldown: 10,
-    guild_only: true,
-    async execute(interaction) {
-      const channelId = interaction.channelId
-      if (game_states.has(channelId)) {
-        await interaction.reply({content: "There is already a game in this channel!", ephemeral: true})
-        return true;
-      }
+	{
+		name: 'game uno',
+		description: 'Create an Uno game',
+		cooldown: 10,
+		guild_only: true,
+		async execute(interaction) {
+			const channelId = interaction.channelId;
+			if (game_states.has(channelId)) {
+				await interaction.reply({
+					content: 'There is already a game in this channel!',
+					ephemeral: true
+				});
+				return true;
+			}
 
-      game_states.set(channelId, {owner: interaction.user.id, players: []}) // set the game state to pre-game state
-      await interaction.reply({
-        content: "An Uno game is starting!",
-        components: [
-          {
-            type: 'ACTION_ROW',
-            components: [join_game_button, leave_game_button]
-          },
-          {
-            type: 'ACTION_ROW',
-            components: [start_game_button, cancel_game_button]
-          }
-        ]
-      })
-      return true;
-    }
-  },
-  async (interaction) => {
-    if (!interaction.isButton()) return;
-    
-    const custom_id = interaction.customId;
-    if (!custom_id.startsWith('uno-')) return;
-    const channelId = interaction.channelId;
-    if (!game_states.has(channelId)) return await interaction.reply({content: "There isn't an Uno game here.", ephemeral: true}) || true;
+			game_states.set(channelId, { owner: interaction.user.id, players: [] }); // set the game state to pre-game state
+			await interaction.reply({
+				content: 'An Uno game is starting!',
+				components: [
+					{
+						type: 'ACTION_ROW',
+						components: [join_game_button, leave_game_button]
+					},
+					{
+						type: 'ACTION_ROW',
+						components: [start_game_button, cancel_game_button]
+					}
+				]
+			});
+			return true;
+		}
+	},
+	async interaction => {
+		if (!interaction.isButton()) return;
 
-    const actionType = custom_id.split('-')[1]
-    switch (actionType) {
-      case 'join': { // someone joins the game
-        if (game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're already in this game!", ephemeral: true}) || true;
-        if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true}) || true;
+		const custom_id = interaction.customId;
+		if (!custom_id.startsWith('uno-')) return;
+		const channelId = interaction.channelId;
+		if (!game_states.has(channelId))
+			return (
+				(await interaction.reply({
+					content: "There isn't an Uno game here.",
+					ephemeral: true
+				})) || true
+			);
 
-        const players = game_states.get(channelId, 'players')
-        const numPlayers = players.length
+		const actionType = custom_id.split('-')[1];
+		switch (actionType) {
+			case 'join': {
+				// someone joins the game
+				if (game_states.includes(channelId, interaction.user.id, 'players'))
+					return (
+						(await interaction.reply({
+							content: "You're already in this game!",
+							ephemeral: true
+						})) || true
+					);
+				if (game_states.has(channelId, 'turn'))
+					return (
+						(await interaction.reply({
+							content: 'The game has already started!',
+							ephemeral: true
+						})) || true
+					);
 
-        if (numPlayers >= 10) return await interaction.reply({content: "There are already 10 players in this game.", ephemeral: true}) || true
+				const players = game_states.get(channelId, 'players');
+				const numPlayers = players.length;
 
-        game_states.push(channelId, interaction.user.id, 'players')
+				if (numPlayers >= 10)
+					return (
+						(await interaction.reply({
+							content: 'There are already 10 players in this game.',
+							ephemeral: true
+						})) || true
+					);
 
-        return await interaction.reply({content: `<@${interaction.user.id}> joined the game!`, allowedMentions: {parse: []}}) || true;
-      }
-      case 'leave': // someone leaves the game
-        if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true}) || true;
-        if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true}) || true;
-        
-        game_states.remove(channelId, interaction.user.id, 'players')
+				game_states.push(channelId, interaction.user.id, 'players');
 
-        return await interaction.reply({content: `<@${interaction.user.id}> left the game.`, allowedMentions: {parse: []}}) || true;
-      case 'start': // starting the game
-        if (game_states.get(channelId, 'owner') !== interaction.user.id && !interaction.member.permissionsIn(interaction.channel).has('MANAGE_CHANNELS')) return await interaction.reply({content: "Only the user who created the game can start it.", ephemeral: true}) || true;
-        if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true}) || true;
-        
-        let players = game_states.get(channelId, 'players')
-        const numPlayers = players.length
-        if (2 > numPlayers || numPlayers > 10) return await interaction.reply({content: "An Uno game must have 2-10 players to start.", ephemeral: true}) || true;
-        players = startGame(channelId)
-        const topCard = getTopCard(channelId)
+				return (
+					(await interaction.reply({
+						content: `<@${interaction.user.id}> joined the game!`,
+						allowedMentions: { parse: [] }
+					})) || true
+				);
+			}
+			case 'leave': // someone leaves the game
+				if (!game_states.includes(channelId, interaction.user.id, 'players'))
+					return (
+						(await interaction.reply({
+							content: "You're not in this game!",
+							ephemeral: true
+						})) || true
+					);
+				if (game_states.has(channelId, 'turn'))
+					return (
+						(await interaction.reply({
+							content: 'The game has already started!',
+							ephemeral: true
+						})) || true
+					);
 
-        await interaction.reply({
-          content: `<@${interaction.user.id}> started the game. Turn order: <@${players.join('>, <@')}>.\n<@${players[0]}> will play first, and the top card is a **${getName(topCard)}**.`,
-          components: [
-            {
-              type: 'ACTION_ROW',
-              components: [view_hand_button]
-            }
-          ],
-          allowedMentions: {users: players}
-        })
-        return;
-      case 'cancel': // cancelling the game
-        if (game_states.get(channelId, 'owner') !== interaction.user.id && !interaction.member.permissionsIn(interaction.channel).has('MANAGE_CHANNELS')) return await interaction.reply({content: "Only the user who created the game can cancel it.", ephemeral: true}) || true;
-        if (game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game has already started!", ephemeral: true}) || true;
-        
-        game_states.delete(channelId)
-        return await interaction.reply(`The game was cancelled by <@${interaction.user.id}>.`) || true;
-    }
-    if (!game_states.includes(channelId, interaction.user.id, 'players')) return await interaction.reply({content: "You're not in this game!", ephemeral: true}) || true;
-    if (!game_states.has(channelId, 'turn')) return await interaction.reply({content: "The game hasn't started yet!", ephemeral: true}) || true;
-    const turn = game_states.get(channelId, 'turn');
-    const players = game_states.get(channelId, 'players')
-    const numPlayers = players.length
-    const playerIndex = game_states.get(channelId, 'players').indexOf(interaction.user.id);
-    const isTurn = mod(turn, numPlayers) === playerIndex
-    if (actionType === 'hand') {
-      const hand = game_states.get(channelId, `hands.${interaction.user.id}`);
-      const topCard = getTopCard(channelId)
+				game_states.remove(channelId, interaction.user.id, 'players');
 
-      let content = `The current card is a **${getName(topCard)}**.\n`
-      const components = []
-      if (isTurn) {
-        drawRequirement = game_states.get(channelId, 'draw_requirement');
-        if (topCard[1] === "+4" && drawRequirement === 4) {
-          content += "You must draw 4 cards."
-          return await interaction.reply({
-            content: content,
-            components: [
-              {
-                type: 'ACTION_ROW',
-                components: [
-                  {
-                    type: 'BUTTON',
-                    style: 'PRIMARY',
-                    label: "Draw 4",
-                    custom_id: `uno-draw4`
-                  }
-                ]
-              }
-            ],
-            ephemeral: true
-          }) || true;
-        }
-        if (drawRequirement) {
-          content += `You must draw ${drawRequirement} if you cannot stack another +2.`
-          components.push({
-            type: 'ACTION_ROW',
-            components: [
-              {
-                type: 'BUTTON',
-                label: `Draw ${drawRequirement}`,
-                style: 'PRIMARY',
-                custom_id: `uno-draw${drawRequirement}`
-              }
-            ]
-          })
-        }
-      }
+				return (
+					(await interaction.reply({
+						content: `<@${interaction.user.id}> left the game.`,
+						allowedMentions: { parse: [] }
+					})) || true
+				);
+			case 'start': // starting the game
+				if (
+					game_states.get(channelId, 'owner') !== interaction.user.id &&
+					!interaction.member
+						.permissionsIn(interaction.channel)
+						.has('MANAGE_CHANNELS')
+				)
+					return (
+						(await interaction.reply({
+							content: 'Only the user who created the game can start it.',
+							ephemeral: true
+						})) || true
+					);
+				if (game_states.has(channelId, 'turn'))
+					return (
+						(await interaction.reply({
+							content: 'The game has already started!',
+							ephemeral: true
+						})) || true
+					);
 
-      row = components.length;
-      column = 0;
-      let allDisabled = true;
-      const drawnCardIndex = game_states.get(channelId, 'drawn_card');
-      for (let i = 0; i < hand.length; i++) {
-        const cardIndex = hand[i];
-        const card = getCard(cardIndex);
-        if (column === 0) components.push({
-          type: 'ACTION_ROW',
-          components: []
-        })
-        const disabled = !isTurn || !isPlayable(channelId, card);
-        allDisabled = allDisabled && disabled
-        components[row].components.push({
-          type: 'BUTTON',
-          label: getName(card),
-          style: "SECONDARY",
-          disabled: disabled,
-          custom_id: `uno-play${(drawnCardIndex !== undefined) ? 'drawn' : ''}-${cardIndex}`
-        })
-        column++;
-        if (column > 4) {
-          column = 0;
-          row++;
-        }
-      }
+				let players = game_states.get(channelId, 'players');
+				const numPlayers = players.length;
+				if (2 > numPlayers || numPlayers > 10)
+					return (
+						(await interaction.reply({
+							content: 'An Uno game must have 2-10 players to start.',
+							ephemeral: true
+						})) || true
+					);
+				players = startGame(channelId);
+				const topCard = getTopCard(channelId);
 
-      if (drawnCardIndex !== undefined) {
-        components.unshift({
-          type: 'ACTION_ROW',
-          components: [
-            {
-              type: 'BUTTON',
-              label: 'End Turn',
-              style: 'DANGER',
-              custom_id: 'uno-end'
-            }
-          ]
-        })
-      }
+				await interaction.reply({
+					content: `<@${
+						interaction.user.id
+					}> started the game. Turn order: <@${players.join('>, <@')}>.\n<@${
+						players[0]
+					}> will play first, and the top card is a **${getName(topCard)}**.`,
+					components: [
+						{
+							type: 'ACTION_ROW',
+							components: [view_hand_button]
+						}
+					],
+					allowedMentions: { users: players }
+				});
+				return;
+			case 'cancel': // cancelling the game
+				if (
+					game_states.get(channelId, 'owner') !== interaction.user.id &&
+					!interaction.member
+						.permissionsIn(interaction.channel)
+						.has('MANAGE_CHANNELS')
+				)
+					return (
+						(await interaction.reply({
+							content: 'Only the user who created the game can cancel it.',
+							ephemeral: true
+						})) || true
+					);
+				if (game_states.has(channelId, 'turn'))
+					return (
+						(await interaction.reply({
+							content: 'The game has already started!',
+							ephemeral: true
+						})) || true
+					);
 
-      if (isTurn && !drawRequirement && allDisabled) {
-        components.unshift({
-          type: 'ACTION_ROW',
-          components: [
-            {
-              type: 'BUTTON',
-              label: 'Draw',
-              style: 'PRIMARY',
-              custom_id: 'uno-draw'
-            }
-          ]
-        })
-      }
-      
-      await interaction.reply({
-        content: content,
-        components: components.slice(0, 5),
-        ephemeral: true
-      })
-      if (components.length > 5) {
-        for (let i = 5; i < components.length; i += 5) {
-          await interaction.followUp({
-            components: components.slice(i, i + 5),
-            ephemeral: true
-          })
-        }
-      }
-      return true;
-    }
-    // the following actions (play, draw) must occur on the player's turn
-    if (!isTurn) return await interaction.reply({content: "It isn't your turn!", ephemeral: true}) || true;
-    let content = ""
-    let hand, drawnCardIndex;
-    switch (actionType) {
-      case 'play': { // someone plays a card
-        const [ , , chosenCardIndexString, chosenColour ] = custom_id.split('-')
+				game_states.delete(channelId);
+				return (
+					(await interaction.reply(
+						`The game was cancelled by <@${interaction.user.id}>.`
+					)) || true
+				);
+		}
+		if (!game_states.includes(channelId, interaction.user.id, 'players'))
+			return (
+				(await interaction.reply({
+					content: "You're not in this game!",
+					ephemeral: true
+				})) || true
+			);
+		if (!game_states.has(channelId, 'turn'))
+			return (
+				(await interaction.reply({
+					content: "The game hasn't started yet!",
+					ephemeral: true
+				})) || true
+			);
+		const turn = game_states.get(channelId, 'turn');
+		const players = game_states.get(channelId, 'players');
+		const numPlayers = players.length;
+		const playerIndex = game_states
+			.get(channelId, 'players')
+			.indexOf(interaction.user.id);
+		const isTurn = mod(turn, numPlayers) === playerIndex;
+		if (actionType === 'hand') {
+			const hand = game_states.get(channelId, `hands.${interaction.user.id}`);
+			const topCard = getTopCard(channelId);
 
-        const chosenCardIndex = parseInt(chosenCardIndexString, 10)
-        if (!game_states.includes(channelId, chosenCardIndex, `hands.${interaction.user.id}`)) return await interaction.reply({content: "That card isn't in your hand anymore.", ephemeral: true}) || true;
-        
-        const chosenCard = getCard(chosenCardIndex, chosenColour);
+			let content = `The current card is a **${getName(topCard)}**.\n`;
+			const components = [];
+			if (isTurn) {
+				drawRequirement = game_states.get(channelId, 'draw_requirement');
+				if (topCard[1] === '+4' && drawRequirement === 4) {
+					content += 'You must draw 4 cards.';
+					return (
+						(await interaction.reply({
+							content: content,
+							components: [
+								{
+									type: 'ACTION_ROW',
+									components: [
+										{
+											type: 'BUTTON',
+											style: 'PRIMARY',
+											label: 'Draw 4',
+											custom_id: `uno-draw4`
+										}
+									]
+								}
+							],
+							ephemeral: true
+						})) || true
+					);
+				}
+				if (drawRequirement) {
+					content += `You must draw ${drawRequirement} if you cannot stack another +2.`;
+					components.push({
+						type: 'ACTION_ROW',
+						components: [
+							{
+								type: 'BUTTON',
+								label: `Draw ${drawRequirement}`,
+								style: 'PRIMARY',
+								custom_id: `uno-draw${drawRequirement}`
+							}
+						]
+					});
+				}
+			}
 
-        const topCard = getTopCard(channelId);
-        const drawRequirement = game_states.get(channelId, 'draw_requirement');
-        if (!isPlayable(channelId, topCard)) return await interaction.reply({content: "You can't play that card!", ephemeral: true}) || true;
+			row = components.length;
+			column = 0;
+			let allDisabled = true;
+			const drawnCardIndex = game_states.get(channelId, 'drawn_card');
+			for (let i = 0; i < hand.length; i++) {
+				const cardIndex = hand[i];
+				const card = getCard(cardIndex);
+				if (column === 0)
+					components.push({
+						type: 'ACTION_ROW',
+						components: []
+					});
+				const disabled = !isTurn || !isPlayable(channelId, card);
+				allDisabled = allDisabled && disabled;
+				components[row].components.push({
+					type: 'BUTTON',
+					label: getName(card),
+					style: 'SECONDARY',
+					disabled: disabled,
+					custom_id: `uno-play${
+						drawnCardIndex !== undefined ? 'drawn' : ''
+					}-${cardIndex}`
+				});
+				column++;
+				if (column > 4) {
+					column = 0;
+					row++;
+				}
+			}
 
-        if (chosenCard[0] === "wild" && !chosenColour) return await interaction.reply({
-          content: "What colour should the wild card represent?",
-          components: [
-            {
-              type: 'ACTION_ROW',
-              components: colours.map(colour => ({
-                type: 'BUTTON',
-                style: 'PRIMARY',
-                label: colour,
-                custom_id: `uno-play-${chosenCardIndex}-${colour}`
-              }))
-            }
-          ],
-          ephemeral: true
-        }) || true;
-        
-        drawnCardIndex = game_states.get(channelId, 'drawn_card');
-        if (drawnCardIndex !== undefined) {
-          content += `<@${interaction.user.id}> played a **${getName(chosenCard)}** after drawing it.`;
-          game_states.delete(channelId, 'drawn_card');
-        } else {
-          content += `<@${interaction.user.id}> played a **${getName(chosenCard)}**.`
-        }
+			if (drawnCardIndex !== undefined) {
+				components.unshift({
+					type: 'ACTION_ROW',
+					components: [
+						{
+							type: 'BUTTON',
+							label: 'End Turn',
+							style: 'DANGER',
+							custom_id: 'uno-end'
+						}
+					]
+				});
+			}
 
-        discardCard(channelId, interaction.user.id, chosenCardIndex)
-        if (chosenColour) {
-          game_states.set(channelId, chosenColour, 'wild_colour')
-        } else {
-          game_states.delete(channelId, 'wild_colour')
-        }
+			if (isTurn && !drawRequirement && allDisabled) {
+				components.unshift({
+					type: 'ACTION_ROW',
+					components: [
+						{
+							type: 'BUTTON',
+							label: 'Draw',
+							style: 'PRIMARY',
+							custom_id: 'uno-draw'
+						}
+					]
+				});
+			}
 
-        hand = game_states.get(channelId, `hands.${interaction.user.id}`)
-        if (hand.length === 0) {
-          content += `\n<@${interaction.user.id}> wins!`
-          endGame(channelId)
-          return await interaction.reply({
-            content: content,
-            allowedMentions: {parse: []}
-          }) || true;
-        }
-        if (hand.length === 1) {
-          content += " **Uno!**"
-        } else {
-          content += ` They now have **${hand.length}** cards.`
-        }
+			await interaction.reply({
+				content: content,
+				components: components.slice(0, 5),
+				ephemeral: true
+			});
+			if (components.length > 5) {
+				for (let i = 5; i < components.length; i += 5) {
+					await interaction.followUp({
+						components: components.slice(i, i + 5),
+						ephemeral: true
+					});
+				}
+			}
+			return true;
+		}
+		// the following actions (play, draw) must occur on the player's turn
+		if (!isTurn)
+			return (
+				(await interaction.reply({
+					content: "It isn't your turn!",
+					ephemeral: true
+				})) || true
+			);
+		let content = '';
+		let hand, drawnCardIndex;
+		switch (actionType) {
+			case 'play': {
+				// someone plays a card
+				const [, , chosenCardIndexString, chosenColour] = custom_id.split('-');
 
-        // handle special cards
-        if (chosenCard[1] === 'skip') {
-          content += "\nThe next player's turn was skipped."
-          incrementTurn(channelId);
-        }
+				const chosenCardIndex = parseInt(chosenCardIndexString, 10);
+				if (
+					!game_states.includes(
+						channelId,
+						chosenCardIndex,
+						`hands.${interaction.user.id}`
+					)
+				)
+					return (
+						(await interaction.reply({
+							content: "That card isn't in your hand anymore.",
+							ephemeral: true
+						})) || true
+					);
 
-        if (chosenCard[1] === 'reverse') {
-          game_states.set(channelId, !game_states.get(channelId, 'reversed'), 'reversed')
-          content += "\nThe direction of play was reversed."
-          if (numPlayers === 2) incrementTurn(channelId);
-        }
+				const chosenCard = getCard(chosenCardIndex, chosenColour);
 
-        if (chosenCard[1].startsWith("+")) {
-          plusNumber = parseInt(chosenCard[1][1], 10)
-          newDrawRequirement = (drawRequirement ?? 0) + plusNumber
-          game_states.set(channelId, newDrawRequirement, 'draw_requirement');
-          content += `\nThe next player must draw ${newDrawRequirement} cards`
-          if (chosenCard[1][1] === '2') content += " or stack another +2"
-          content += "."
-        }
-        break;
-      }
-      default: // someone draws a card
-        if (!actionType.startsWith('draw')) return; // if someone presses an old button it could have a different custom id - ignore it
+				const topCard = getTopCard(channelId);
+				const drawRequirement = game_states.get(channelId, 'draw_requirement');
+				if (!isPlayable(channelId, topCard))
+					return (
+						(await interaction.reply({
+							content: "You can't play that card!",
+							ephemeral: true
+						})) || true
+					);
 
-        hand = game_states.get(channelId, `hands.${interaction.user.id}`)
-        const drawRequirement = game_states.get(channelId, 'draw_requirement');
+				if (chosenCard[0] === 'wild' && !chosenColour)
+					return (
+						(await interaction.reply({
+							content: 'What colour should the wild card represent?',
+							components: [
+								{
+									type: 'ACTION_ROW',
+									components: colours.map(colour => ({
+										type: 'BUTTON',
+										style: 'PRIMARY',
+										label: colour,
+										custom_id: `uno-play-${chosenCardIndex}-${colour}`
+									}))
+								}
+							],
+							ephemeral: true
+						})) || true
+					);
 
-        if (actionType !== 'draw') { // draw 2+ cards (due to +2 or +4 cards)
-          if (!drawRequirement) return await interaction.reply({content: "There's no need to draw at the moment!", ephemeral: true}) || true;
-          if (actionType.slice(4) !== drawRequirement.toString()) return await interaction.reply({content: "That doesn't match the current draw requirement - press \"View Hand\" again.", ephemeral: true}) || true;
-          const dealtCards = dealCards(channelId, interaction.user.id, drawRequirement);
-          content += `<@${interaction.user.id}> drew ${dealtCards.length} card${dealtCards.length === 1 ? '' : 's'}`;
-          if (dealtCards.length < drawRequirement) content += ` because there were not enough available to draw ${drawRequirement}`
-          content += `. They now have **${hand.length}** cards.`
-          game_states.delete(channelId, 'draw_requirement');
-          await interaction.reply({content: `You drew: **${dealtCards.map(index => getName(getCard(index))).join("**, **")}**`, ephemeral: true});
-          break;
-        }
-        const initialDrawnCardIndex = game_states.get(channelId, 'drawn_card');
-        if (initialDrawnCardIndex === undefined && hand.some(cardIndex => isPlayable(channelId, getCard(cardIndex)))) return await interaction.reply({content: "You can't draw if you can play a card!", ephemeral: true}) || true;
-        if (initialDrawnCardIndex === undefined) {
-          [ drawnCardIndex ] = dealCards(channelId, interaction.user.id);
-        } else {
-          drawnCardIndex = initialDrawnCardIndex
-        }
-        if (drawnCardIndex !== undefined) {
-          const drawnCard = getCard(drawnCardIndex);
-          if (initialDrawnCardIndex !== undefined || isPlayable(channelId, drawnCard)) {
-            game_states.set(channelId, drawnCardIndex, 'drawn_card')
-            return await interaction.reply({
-              content: `You drew a **${getName(drawnCard)}**.`,
-              components: [
-                {
-                  type: 'ACTION_ROW',
-                  components: [
-                    {
-                      type: 'BUTTON',
-                      label: "Play",
-                      style: "SUCCESS",
-                      custom_id: `uno-play-${drawnCardIndex}`
-                    },
-                    {
-                      type: 'BUTTON',
-                      label: "End Turn",
-                      style: "DANGER",
-                      custom_id: `uno-end-${drawnCardIndex}`
-                    }
-                  ]
-                }
-              ],
-              ephemeral: true
-            }) || true;
-          }
-          await interaction.reply({content: `You drew a **${getName(drawnCard)}**.`, ephemeral: true});
-        }
-      case 'end': // someone ends their turn after drawing a card
-        if (actionType === 'end') {
-          if (!game_states.has(channelId, 'drawn_card')) return await interaction.reply({content: "You can't end your turn at the moment!", ephemeral: true}) || true;
-          drawnCardIndex = game_states.get(channelId, 'drawn_card')
-          game_states.delete(channelId, 'drawn_card')
-        }
+				drawnCardIndex = game_states.get(channelId, 'drawn_card');
+				if (drawnCardIndex !== undefined) {
+					content += `<@${interaction.user.id}> played a **${getName(
+						chosenCard
+					)}** after drawing it.`;
+					game_states.delete(channelId, 'drawn_card');
+				} else {
+					content += `<@${interaction.user.id}> played a **${getName(
+						chosenCard
+					)}**.`;
+				}
 
-        if (!hand) hand = game_states.get(channelId, `hands.${interaction.user.id}`)
-        if (drawnCardIndex !== undefined) {
-          content = `<@${interaction.user.id}> drew a card. They now have **${hand.length}** cards.`
-        } else {
-          content = `<@${interaction.user.id}> tried to draw a card, but there were none available.`
-        }
-        break;
-    }
-    incrementTurn(channelId); // increment the turn count
+				discardCard(channelId, interaction.user.id, chosenCardIndex);
+				if (chosenColour) {
+					game_states.set(channelId, chosenColour, 'wild_colour');
+				} else {
+					game_states.delete(channelId, 'wild_colour');
+				}
 
-    const nextTurn = game_states.get(channelId, 'turn');
-    const nextPlayer = game_states.get(channelId, `players.${mod(nextTurn, numPlayers)}`);
-    content += `\n<@${nextPlayer}> will play next.`;
+				hand = game_states.get(channelId, `hands.${interaction.user.id}`);
+				if (hand.length === 0) {
+					content += `\n<@${interaction.user.id}> wins!`;
+					endGame(channelId);
+					return (
+						(await interaction.reply({
+							content: content,
+							allowedMentions: { parse: [] }
+						})) || true
+					);
+				}
+				if (hand.length === 1) {
+					content += ' **Uno!**';
+				} else {
+					content += ` They now have **${hand.length}** cards.`;
+				}
 
-    if (interaction.replied) {
-      return await interaction.followUp({
-        content: content,
-        allowedMentions: {users: [nextPlayer]},
-        components: [
-          {
-            type: 'ACTION_ROW',
-            components: [view_hand_button]
-          }
-        ]
-      }) || true;
-    } else {
-      return await interaction.reply({
-        content: content,
-        allowedMentions: {users: [nextPlayer]},
-        components: [
-          {
-            type: 'ACTION_ROW',
-            components: [view_hand_button]
-          }
-        ]
-      }) || true;
-    }
-  },
-  {
-    name: 'stats uno',
-    description: "Get a user's stats for Uno games.",
-    async execute(interaction) {
-      const user = interaction.options.getUser('user');
-      user_stats.ensure(user.id)
-      const played = user_stats.get(user.id, 'played')
-      const wins = user_stats.get(user.id, 'wins')
-      const cards_drawn = user_stats.get(user.id, 'cards_drawn')
-      return await interaction.reply({content: `Uno stats for <@${user.id}>:
+				// handle special cards
+				if (chosenCard[1] === 'skip') {
+					content += "\nThe next player's turn was skipped.";
+					incrementTurn(channelId);
+				}
+
+				if (chosenCard[1] === 'reverse') {
+					game_states.set(
+						channelId,
+						!game_states.get(channelId, 'reversed'),
+						'reversed'
+					);
+					content += '\nThe direction of play was reversed.';
+					if (numPlayers === 2) incrementTurn(channelId);
+				}
+
+				if (chosenCard[1].startsWith('+')) {
+					plusNumber = parseInt(chosenCard[1][1], 10);
+					newDrawRequirement = (drawRequirement ?? 0) + plusNumber;
+					game_states.set(channelId, newDrawRequirement, 'draw_requirement');
+					content += `\nThe next player must draw ${newDrawRequirement} cards`;
+					if (chosenCard[1][1] === '2') content += ' or stack another +2';
+					content += '.';
+				}
+				break;
+			}
+			default:
+				// someone draws a card
+				if (!actionType.startsWith('draw')) return; // if someone presses an old button it could have a different custom id - ignore it
+
+				hand = game_states.get(channelId, `hands.${interaction.user.id}`);
+				const drawRequirement = game_states.get(channelId, 'draw_requirement');
+
+				if (actionType !== 'draw') {
+					// draw 2+ cards (due to +2 or +4 cards)
+					if (!drawRequirement)
+						return (
+							(await interaction.reply({
+								content: "There's no need to draw at the moment!",
+								ephemeral: true
+							})) || true
+						);
+					if (actionType.slice(4) !== drawRequirement.toString())
+						return (
+							(await interaction.reply({
+								content:
+									'That doesn\'t match the current draw requirement - press "View Hand" again.',
+								ephemeral: true
+							})) || true
+						);
+					const dealtCards = dealCards(
+						channelId,
+						interaction.user.id,
+						drawRequirement
+					);
+					content += `<@${interaction.user.id}> drew ${dealtCards.length} card${
+						dealtCards.length === 1 ? '' : 's'
+					}`;
+					if (dealtCards.length < drawRequirement)
+						content += ` because there were not enough available to draw ${drawRequirement}`;
+					content += `. They now have **${hand.length}** cards.`;
+					game_states.delete(channelId, 'draw_requirement');
+					await interaction.reply({
+						content: `You drew: **${dealtCards
+							.map(index => getName(getCard(index)))
+							.join('**, **')}**`,
+						ephemeral: true
+					});
+					break;
+				}
+				const initialDrawnCardIndex = game_states.get(channelId, 'drawn_card');
+				if (
+					initialDrawnCardIndex === undefined &&
+					hand.some(cardIndex => isPlayable(channelId, getCard(cardIndex)))
+				)
+					return (
+						(await interaction.reply({
+							content: "You can't draw if you can play a card!",
+							ephemeral: true
+						})) || true
+					);
+				if (initialDrawnCardIndex === undefined) {
+					[drawnCardIndex] = dealCards(channelId, interaction.user.id);
+				} else {
+					drawnCardIndex = initialDrawnCardIndex;
+				}
+				if (drawnCardIndex !== undefined) {
+					const drawnCard = getCard(drawnCardIndex);
+					if (
+						initialDrawnCardIndex !== undefined ||
+						isPlayable(channelId, drawnCard)
+					) {
+						game_states.set(channelId, drawnCardIndex, 'drawn_card');
+						return (
+							(await interaction.reply({
+								content: `You drew a **${getName(drawnCard)}**.`,
+								components: [
+									{
+										type: 'ACTION_ROW',
+										components: [
+											{
+												type: 'BUTTON',
+												label: 'Play',
+												style: 'SUCCESS',
+												custom_id: `uno-play-${drawnCardIndex}`
+											},
+											{
+												type: 'BUTTON',
+												label: 'End Turn',
+												style: 'DANGER',
+												custom_id: `uno-end-${drawnCardIndex}`
+											}
+										]
+									}
+								],
+								ephemeral: true
+							})) || true
+						);
+					}
+					await interaction.reply({
+						content: `You drew a **${getName(drawnCard)}**.`,
+						ephemeral: true
+					});
+				}
+			case 'end': // someone ends their turn after drawing a card
+				if (actionType === 'end') {
+					if (!game_states.has(channelId, 'drawn_card'))
+						return (
+							(await interaction.reply({
+								content: "You can't end your turn at the moment!",
+								ephemeral: true
+							})) || true
+						);
+					drawnCardIndex = game_states.get(channelId, 'drawn_card');
+					game_states.delete(channelId, 'drawn_card');
+				}
+
+				if (!hand)
+					hand = game_states.get(channelId, `hands.${interaction.user.id}`);
+				if (drawnCardIndex !== undefined) {
+					content = `<@${interaction.user.id}> drew a card. They now have **${hand.length}** cards.`;
+				} else {
+					content = `<@${interaction.user.id}> tried to draw a card, but there were none available.`;
+				}
+				break;
+		}
+		incrementTurn(channelId); // increment the turn count
+
+		const nextTurn = game_states.get(channelId, 'turn');
+		const nextPlayer = game_states.get(
+			channelId,
+			`players.${mod(nextTurn, numPlayers)}`
+		);
+		content += `\n<@${nextPlayer}> will play next.`;
+
+		if (interaction.replied) {
+			return (
+				(await interaction.followUp({
+					content: content,
+					allowedMentions: { users: [nextPlayer] },
+					components: [
+						{
+							type: 'ACTION_ROW',
+							components: [view_hand_button]
+						}
+					]
+				})) || true
+			);
+		} else {
+			return (
+				(await interaction.reply({
+					content: content,
+					allowedMentions: { users: [nextPlayer] },
+					components: [
+						{
+							type: 'ACTION_ROW',
+							components: [view_hand_button]
+						}
+					]
+				})) || true
+			);
+		}
+	},
+	{
+		name: 'stats uno',
+		description: "Get a user's stats for Uno games.",
+		async execute(interaction) {
+			const user = interaction.options.getUser('user');
+			user_stats.ensure(user.id);
+			const played = user_stats.get(user.id, 'played');
+			const wins = user_stats.get(user.id, 'wins');
+			const cards_drawn = user_stats.get(user.id, 'cards_drawn');
+			return (
+				(await interaction.reply({
+					content: `Uno stats for <@${user.id}>:
 \`\`\`Games played: ${played}
 Wins: ${wins}
-Total cards drawn: ${cards_drawn}\`\`\``, allowedMentions: {parse: []}}) || true;
-    }
-  }
+Total cards drawn: ${cards_drawn}\`\`\``,
+					allowedMentions: { parse: [] }
+				})) || true
+			);
+		}
+	}
 ];
