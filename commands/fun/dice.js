@@ -1,3 +1,5 @@
+const MAX_NUMBER_DICE = 5;
+
 module.exports = {
 	name: 'dice',
 	description: 'Roll a die',
@@ -25,6 +27,10 @@ module.exports = {
 	async execute(interaction) {
 		const max = interaction.options.getInteger('type') ?? 6;
 		const number = interaction.options.getInteger('number') ?? 1;
+		if (number === 1)
+			return (
+				(await interaction.reply(getRandomInt(1, max + 1).toString())) || true
+			);
 		if (number < 1)
 			return (
 				(await interaction.reply({
@@ -32,16 +38,12 @@ module.exports = {
 					ephemeral: true
 				})) || true
 			);
-		if (number > 10)
+		if (number > MAX_NUMBER_DICE)
 			return (
 				(await interaction.reply({
-					content: 'You cannot roll more than 10 dice at once.',
+					content: `You cannot roll more than ${MAX_NUMBER_DICE} dice at once.`,
 					ephemeral: true
 				})) || true
-			);
-		if (number === 1)
-			return (
-				(await interaction.reply(getRandomInt(1, max + 1).toString())) || true
 			);
 		const rolls = [];
 		for (let i = 0; i < number; i++) {
