@@ -26,7 +26,7 @@ module.exports = [
 	{
 		name: 'game rps',
 		description: 'Challenge someone to rock paper scissors',
-		cooldown: 1,
+		cooldown: 5,
 		options: [
 			{
 				name: 'opponent',
