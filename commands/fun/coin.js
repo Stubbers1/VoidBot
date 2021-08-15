@@ -1,6 +1,6 @@
 const sides = ['heads', 'tails'];
 
-const MAX_NUMBER_COINS = 10;
+const MAX_NUMBER_COINS = 999;
 
 module.exports = {
 	name: 'coin',
